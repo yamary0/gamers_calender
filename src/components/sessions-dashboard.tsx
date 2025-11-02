@@ -46,7 +46,7 @@ export function SessionsDashboard({
 
   const accessToken = session?.access_token ?? null;
   const canMutate = Boolean(accessToken);
-
+ 
   async function refreshSessions() {
     const headers: HeadersInit = accessToken
       ? { Authorization: `Bearer ${accessToken}` }

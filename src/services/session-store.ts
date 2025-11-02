@@ -7,12 +7,19 @@ export type SessionSchedule =
   | { kind: "all-day"; date: string }
   | { kind: "timed"; startAt: string; endAt: string | null };
 
+export type SessionParticipant = {
+  id: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  provider: string | null;
+};
+
 export type Session = {
   id: string;
   title: string;
   maxPlayers: number;
   status: SessionStatus;
-  participants: string[];
+  participants: SessionParticipant[];
   createdAt: string;
   schedule: SessionSchedule;
 };
@@ -70,15 +77,107 @@ const mapRowSchedule = (row: SessionRow): SessionSchedule => {
   return { kind: "timed", startAt: row.start_at, endAt: row.end_at };
 };
 
-const mapRowToSession = (row: SessionRow): Session => ({
+type ParticipantProfile = {
+  displayName: string | null;
+  avatarUrl: string | null;
+  provider: string | null;
+};
+
+const mapRowToSession = (
+  row: SessionRow,
+  profiles: Map<string, ParticipantProfile>,
+): Session => ({
   id: row.id,
   title: row.title,
   maxPlayers: row.max_players,
   status: mapStatus(row.status),
-  participants: row.participants?.map((participant) => participant.user_id) ?? [],
+  participants:
+    row.participants?.map((participant) => {
+      const profile = profiles.get(participant.user_id);
+      const provider = profile?.provider ?? null;
+      const isDiscord = provider === "discord";
+      return {
+        id: participant.user_id,
+        displayName: isDiscord ? profile?.displayName ?? null : null,
+        avatarUrl: isDiscord ? profile?.avatarUrl ?? null : null,
+        provider,
+      };
+    }) ?? [],
   createdAt: row.created_at,
   schedule: mapRowSchedule(row),
 });
+
+const collectParticipantIds = (rows: SessionRow | SessionRow[]): string[] => {
+  const list = Array.isArray(rows) ? rows : [rows];
+  const ids = new Set<string>();
+  list.forEach((row) => {
+    row.participants?.forEach((participant) => {
+      if (participant.user_id) {
+        ids.add(participant.user_id);
+      }
+    });
+  });
+  return [...ids];
+};
+
+async function loadParticipantProfiles(
+  userIds: string[],
+): Promise<Map<string, ParticipantProfile>> {
+  const profiles = new Map<string, ParticipantProfile>();
+
+  if (userIds.length === 0) {
+    return profiles;
+  }
+
+  const supabase = admin();
+  const uniqueIds = [...new Set(userIds)];
+
+  await Promise.all(
+    uniqueIds.map(async (userId) => {
+      try {
+        const { data, error } = await supabase.auth.admin.getUserById(userId);
+        if (error || !data?.user) {
+          return;
+        }
+
+        const user = data.user;
+        const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+        const displayName =
+          typeof metadata.name === "string"
+            ? metadata.name
+            : typeof metadata.full_name === "string"
+              ? metadata.full_name
+              : typeof metadata.user_name === "string"
+                ? metadata.user_name
+                : null;
+        const avatarUrl =
+          typeof metadata.avatar_url === "string" ? metadata.avatar_url : null;
+
+        const provider =
+          typeof user.app_metadata?.provider === "string"
+            ? (user.app_metadata.provider as string)
+            : Array.isArray(user.identities)
+              ? user.identities.find(
+                  (identity) =>
+                    identity &&
+                    typeof identity.provider === "string" &&
+                    identity.user_id === userId,
+                )?.provider ?? null
+              : null;
+
+        profiles.set(userId, {
+          displayName,
+          avatarUrl,
+          provider,
+        });
+      } catch {
+        // Ignore failures for individual users; fall back to id-only display.
+      }
+    }),
+  );
+
+  return profiles;
+}
 
 const scheduleToColumns = (schedule: SessionSchedule): ScheduleColumns => {
   switch (schedule.kind) {
@@ -142,12 +241,23 @@ export async function listSessions(): Promise<Session[]> {
     throw new Error(`Failed to list sessions: ${error.message}`);
   }
 
-  return (data ?? []).map(mapRowToSession);
+  const rows = data ?? [];
+  const profileMap = await loadParticipantProfiles(collectParticipantIds(rows));
+
+  return rows.map((row) => mapRowToSession(row, profileMap));
 }
 
 export async function getSession(id: string): Promise<Session | null> {
   const row = await fetchSessionById(id);
-  return row ? mapRowToSession(row) : null;
+  if (!row) {
+    return null;
+  }
+
+  const profiles = await loadParticipantProfiles(
+    collectParticipantIds(row),
+  );
+
+  return mapRowToSession(row, profiles);
 }
 
 export async function createSession(
@@ -204,8 +314,10 @@ export async function createSession(
     throw new Error("Failed to reload session after creation.");
   }
 
+  const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+
   return {
-    session: mapRowToSession(refreshed),
+    session: mapRowToSession(refreshed, profiles),
     activated: shouldActivate,
   };
 }
@@ -288,8 +400,10 @@ export async function updateSession(
     }
   }
 
+  const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+
   return {
-    session: mapRowToSession(refreshed),
+    session: mapRowToSession(refreshed, profiles),
     activated: existing.status !== "active" && refreshed.status === "active",
   };
 }
@@ -318,7 +432,8 @@ export async function joinSession(
     .maybeSingle();
 
   if (existing) {
-    return { session: mapRowToSession(session), activated: false };
+    const profiles = await loadParticipantProfiles(collectParticipantIds(session));
+    return { session: mapRowToSession(session, profiles), activated: false };
   }
 
   const count = await participantCount(id);
@@ -349,8 +464,10 @@ export async function joinSession(
     throw new Error("Failed to reload session after join.");
   }
 
+  const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+
   return {
-    session: mapRowToSession(refreshed),
+    session: mapRowToSession(refreshed, profiles),
     activated: shouldActivate,
   };
 }
@@ -369,5 +486,7 @@ export async function deleteSession(id: string): Promise<Session | null> {
     throw new Error(`Failed to delete session: ${error.message}`);
   }
 
-  return mapRowToSession(existing);
+  const profiles = await loadParticipantProfiles(collectParticipantIds(existing));
+
+  return mapRowToSession(existing, profiles);
 }

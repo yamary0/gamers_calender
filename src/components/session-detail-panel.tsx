@@ -316,7 +316,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
         <CardHeader>
           <CardTitle>Participants</CardTitle>
           <CardDescription>
-            Users attending this session (user IDs)
+            Discord sign-ins show their display name and avatar when available.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -325,15 +325,50 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
               No participants have joined yet.
             </p>
           ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {session.participants.map((participantId) => (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {session.participants.map((participant) => {
+                const isDiscord = participant.provider === "discord";
+                const label = isDiscord && participant.displayName
+                  ? participant.displayName
+                  : participant.id;
+                const secondary = isDiscord
+                  ? `Discord · ${participant.id}`
+                  : `ID · ${participant.id}`;
+                const fallbackInitial = label
+                  .trim()
+                  .charAt(0)
+                  .toUpperCase();
+
+                return (
                 <li
-                  key={participantId}
-                  className="rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground"
+                  key={participant.id}
+                  className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-3"
                 >
-                  {participantId}
+                  <div className="flex size-10 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-xs font-medium text-muted-foreground">
+                    {isDiscord && participant.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={participant.avatarUrl}
+                        alt={`${label}'s avatar`}
+                        referrerPolicy="no-referrer"
+                        className="size-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span>{fallbackInitial || "?"}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">
+                      {label}
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {secondary}
+                    </span>
+                  </div>
                 </li>
-              ))}
+              );
+              })}
             </ul>
           )}
         </CardContent>

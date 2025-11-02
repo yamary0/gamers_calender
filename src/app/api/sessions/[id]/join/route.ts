@@ -1,13 +1,14 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { joinSession } from "@/services/session-store";
 
-type RouteParams = {
-  params: { id: string };
-};
-
-export function POST(_request: Request, { params }: RouteParams) {
+export async function POST(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
   try {
-    const session = joinSession(params.id);
+    const { id } = await context.params;
+    const session = joinSession(id);
     return NextResponse.json({ data: session });
   } catch (error) {
     if (error instanceof Error) {

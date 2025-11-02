@@ -2,6 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { ErrorToast } from "@/components/error-toast";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
@@ -82,126 +91,128 @@ export function SessionsDashboard({
   }
 
   return (
-    <section className="mt-10 space-y-6">
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Create session</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Provide a title and max players to open a new slot.
-        </p>
-        <form className="mt-4 space-y-4" onSubmit={handleCreate}>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700" htmlFor="title">
-              Title
-            </label>
-            <input
-              id="title"
-              name="title"
-              required
-              minLength={3}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-              placeholder="Friday Night Raid"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label
-              className="text-sm font-medium text-zinc-700"
-              htmlFor="maxPlayers"
-            >
-              Maximum players
-            </label>
-            <input
-              id="maxPlayers"
-              name="maxPlayers"
-              required
-              min={1}
-              type="number"
-              className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-              placeholder="5"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-          >
-            {isPending ? "Saving..." : "Create"}
-          </button>
-        </form>
-      </div>
+    <section className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create session</CardTitle>
+          <CardDescription>
+            Provide a title and headcount to open a new slot.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-muted-foreground" htmlFor="title">
+                Title
+              </label>
+              <input
+                id="title"
+                name="title"
+                required
+                minLength={3}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                placeholder="Friday Night Raid"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label
+                className="text-sm font-medium text-muted-foreground"
+                htmlFor="maxPlayers"
+              >
+                Maximum players
+              </label>
+              <input
+                id="maxPlayers"
+                name="maxPlayers"
+                required
+                min={1}
+                type="number"
+                className="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                placeholder="5"
+              />
+            </div>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Create"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {formError && <ErrorToast message={formError} />}
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Active sessions</h2>
-          <button
-            type="button"
-            className="text-sm font-medium text-zinc-600 underline-offset-2 hover:underline"
-            onClick={() =>
-              startTransition(async () => {
-                try {
-                  await refreshSessions();
-                } catch (error) {
-                  setFormError(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to refresh sessions",
-                  );
-                }
-              })
-            }
-          >
-            Refresh
-          </button>
-        </div>
-        <p className="mt-1 text-sm text-zinc-500">
-          Join a session to reach the ready state.
-        </p>
-
-        <ul className="mt-4 space-y-3">
-          {sessions.length === 0 && (
-            <li className="rounded-md border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500">
-              No sessions yet. Create one above to get started.
-            </li>
-          )}
-          {sessions.map((session) => {
-            const participants = `${session.participants.length}/${session.maxPlayers}`;
-            const isFull = session.status === "active";
-            return (
-              <li
-                key={session.id}
-                className="flex flex-col gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {session.title}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Status:{" "}
-                    <span className="font-medium text-zinc-700">
-                      {session.status}
-                    </span>
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Participants:{" "}
-                    <span className="font-medium text-zinc-700">
-                      {participants}
-                    </span>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleJoin(session.id)}
-                  disabled={isPending || isFull}
-                  className="inline-flex items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-400"
-                >
-                  {isFull ? "Ready" : isPending ? "Joining..." : "Join"}
-                </button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Active sessions</CardTitle>
+          <CardDescription>
+            Join a session to move it into the ready state.
+          </CardDescription>
+          <CardAction>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                startTransition(async () => {
+                  try {
+                    await refreshSessions();
+                  } catch (error) {
+                    setFormError(
+                      error instanceof Error
+                        ? error.message
+                        : "Unable to refresh sessions",
+                    );
+                  }
+                })
+              }
+              disabled={isPending}
+            >
+              Refresh
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-3">
+            {sessions.length === 0 && (
+              <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                No sessions yet. Create one above to get started.
               </li>
-            );
-          })}
-        </ul>
-      </div>
+            )}
+            {sessions.map((session) => {
+              const participants = `${session.participants.length}/${session.maxPlayers}`;
+              const isFull = session.status === "active";
+              return (
+                <li
+                  key={session.id}
+                  className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-semibold">{session.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Status:{" "}
+                      <span className="font-medium text-foreground">
+                        {session.status}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Participants:{" "}
+                      <span className="font-medium text-foreground">
+                        {participants}
+                      </span>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handleJoin(session.id)}
+                    disabled={isPending || isFull}
+                  >
+                    {isFull ? "Ready" : isPending ? "Joining..." : "Join"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </CardContent>
+      </Card>
     </section>
   );
 }

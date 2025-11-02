@@ -5,19 +5,11 @@ import {
   type CreateSessionPayload,
 } from "@/services/session-store";
 import { getUserFromRequest } from "@/lib/auth-server";
+import { sendDiscordNotification } from "@/lib/discord";
 
-const extractAccessToken = (request: Request) => {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader?.toLowerCase().startsWith("bearer ")) {
-    return authHeader.slice(7);
-  }
-  return null;
-};
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const accessToken = extractAccessToken(request) ?? undefined;
-    const sessions = await listSessions(accessToken);
+    const sessions = await listSessions();
     return NextResponse.json({ data: sessions });
   } catch (error) {
     return NextResponse.json(
@@ -70,23 +62,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const accessToken = extractAccessToken(request);
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: "Missing bearer token." },
-        { status: 401 },
-      );
-    }
-
-    const session = await createSession(
+    const { session, activated } = await createSession(
       {
         title,
         maxPlayers,
       },
       user.id,
-      accessToken,
     );
+
+    if (activated) {
+      await sendDiscordNotification({
+        content: `✅ **Session Ready:** ${session.title} is now active (${session.participants.length}/${session.maxPlayers})`,
+      });
+    }
 
     return NextResponse.json({ data: session }, { status: 201 });
   } catch (error) {

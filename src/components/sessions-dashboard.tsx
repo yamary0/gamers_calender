@@ -32,10 +32,6 @@ export function SessionsDashboard({
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authFeedback, setAuthFeedback] = useState<string | null>(null);
   const [createScheduleKind, setCreateScheduleKind] =
     useState<ScheduleKind>("none");
   const [createAllDayDate, setCreateAllDayDate] = useState("");
@@ -44,17 +40,7 @@ export function SessionsDashboard({
   const [activeView, setActiveView] = useState<"feed" | "calendar">("feed");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const {
-    user,
-    session,
-    loading: authLoading,
-    authError,
-    signInWithEmail,
-    signUpWithEmail,
-    signInWithDiscord,
-    signOut,
-    refreshSession,
-  } = useAuth();
+  const { session } = useAuth();
 
   const accessToken = session?.access_token ?? null;
   const canMutate = Boolean(accessToken);
@@ -106,30 +92,6 @@ export function SessionsDashboard({
       ),
     [sessions],
   );
-
-  const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
-    event,
-  ) => {
-    event.preventDefault();
-    setAuthFeedback(null);
-    if (!email || !password) {
-      setAuthFeedback("Email and password are required.");
-      return;
-    }
-
-    if (authMode === "signIn") {
-      await signInWithEmail(email, password);
-      await refreshSession();
-    } else {
-      await signUpWithEmail(email, password);
-      setAuthFeedback("Sign up successful. Confirm your email before signing in.");
-    }
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    await refreshSession();
-  };
 
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -225,121 +187,6 @@ export function SessionsDashboard({
     <section className="space-y-6">
       {formError && <ErrorToast message={formError} />}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Authentication</CardTitle>
-          <CardDescription>
-            Sign in to create and join sessions. Accounts use email + password.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {authLoading ? (
-            <p className="text-sm text-muted-foreground">Loading session…</p>
-          ) : user ? (
-            <div className="flex flex-col gap-3">
-              <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
-                <p className="font-medium text-foreground">
-                  Signed in as {user.email ?? user.id}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  User ID: {user.id}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleSignOut}
-                  disabled={isPending}
-                >
-                  Sign out
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  Refresh the page after signing out to clear server state.
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <form className="space-y-4" onSubmit={handleAuthSubmit}>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={authMode === "signIn" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAuthMode("signIn")}
-                  >
-                    Sign in
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={authMode === "signUp" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAuthMode("signUp")}
-                  >
-                    Sign up
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-email">
-                    Email
-                  </label>
-                  <input
-                    id="auth-email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-password">
-                    Password
-                  </label>
-                  <input
-                    id="auth-password"
-                    type="password"
-                    required
-                    value={password}
-                    minLength={6}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    placeholder="At least 6 characters"
-                  />
-                </div>
-                <Button type="submit">
-                  {authMode === "signIn" ? "Sign in" : "Create account"}
-                </Button>
-                {authError && <ErrorToast message={authError} />}
-                {authFeedback && (
-                  <p className="text-xs text-muted-foreground">{authFeedback}</p>
-                )}
-              </form>
-              <div className="flex flex-col items-start gap-2 border-t border-dashed border-border pt-4">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Or continue with
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    signInWithDiscord(
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/auth/callback`
-                        : undefined,
-                    )
-                  }
-                >
-                  Sign in with Discord
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       <div
         role="tablist"
         aria-label="Session view"
@@ -387,6 +234,11 @@ export function SessionsDashboard({
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleCreate}>
+              {!canMutate && (
+                <p className="text-xs text-muted-foreground">
+                  Sign in via the user menu to create sessions.
+                </p>
+              )}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="create-title">
                   Title
@@ -621,9 +473,6 @@ export function SessionsDashboard({
                           </Button>
                         </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Edit or delete this session from its detail page.
-                      </p>
                     </li>
                   );
                 })}

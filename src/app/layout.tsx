@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Link from "next/link";
 import { AuthProvider } from "@/components/auth-provider";
+import { UserMenu } from "@/components/user-menu";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,13 +33,14 @@ export default function RootLayout({
         <AuthProvider>
           <div className="flex min-h-screen flex-col bg-background text-foreground">
             <header className="border-b">
-              <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-4">
-                <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
+                <Link
+                  href="/"
+                  className="text-sm font-semibold uppercase tracking-wide text-muted-foreground transition hover:text-foreground"
+                >
                   Gamers Calendar
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Local MVP build
-                </span>
+                </Link>
+                <UserMenu />
               </div>
             </header>
 

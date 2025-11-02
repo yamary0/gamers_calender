@@ -1,4 +1,6 @@
-type SessionStatus = "open" | "active";
+import { getSupabaseServerClient } from "@/lib/supabase";
+
+export type SessionStatus = "open" | "active";
 
 export type Session = {
   id: string;
@@ -14,54 +16,123 @@ export type CreateSessionPayload = {
   maxPlayers: number;
 };
 
-const sessions = new Map<string, Session>();
+type SessionRow = {
+  id: string;
+  title: string;
+  max_players: number;
+  status: string;
+  created_at: string;
+  participants?: Array<{ user_id: string }>;
+};
 
-const newId = () => crypto.randomUUID();
-
-export function listSessions(): Session[] {
-  return Array.from(sessions.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+function mapStatus(value: string): SessionStatus {
+  return value === "active" ? "active" : "open";
 }
 
-export function createSession(payload: CreateSessionPayload): Session {
-  const id = newId();
-  const session: Session = {
-    id,
-    title: payload.title,
-    maxPlayers: payload.maxPlayers,
-    status: "open",
-    participants: [],
-    createdAt: new Date().toISOString(),
+function mapRowToSession(row: SessionRow): Session {
+  return {
+    id: row.id,
+    title: row.title,
+    maxPlayers: row.max_players,
+    status: mapStatus(row.status),
+    participants: row.participants?.map((participant) => participant.user_id) ?? [],
+    createdAt: row.created_at,
   };
-
-  sessions.set(id, session);
-
-  return session;
 }
 
-export function findSession(id: string): Session | undefined {
-  return sessions.get(id);
+export async function listSessions(): Promise<Session[]> {
+  const supabase = getSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to list sessions: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapRowToSession);
 }
 
-export function joinSession(id: string): Session {
-  const session = sessions.get(id);
+export async function createSession(
+  payload: CreateSessionPayload,
+): Promise<Session> {
+  const supabase = getSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("sessions")
+    .insert({
+      title: payload.title,
+      max_players: payload.maxPlayers,
+      status: "open",
+    })
+    .select("id,title,max_players,status,created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to create session: ${error?.message ?? "unknown error"}`);
+  }
+
+  return mapRowToSession({ ...data, participants: [] });
+}
+
+export async function joinSession(id: string): Promise<Session> {
+  const supabase = getSupabaseServerClient();
+
+  const { data: session, error: sessionError } = await supabase
+    .from("sessions")
+    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (sessionError) {
+    throw new Error(`Failed to load session: ${sessionError.message}`);
+  }
 
   if (!session) {
     throw new Error("Session not found");
   }
 
-  if (session.participants.length >= session.maxPlayers) {
+  const participantIds = session.participants?.map((participant) => participant.user_id) ?? [];
+
+  if (participantIds.length >= session.max_players || session.status === "active") {
     throw new Error("Session is full");
   }
 
-  session.participants = [...session.participants, crypto.randomUUID()];
+  const newParticipantId = crypto.randomUUID();
 
-  if (session.participants.length >= session.maxPlayers) {
-    session.status = "active";
+  const { error: insertError } = await supabase
+    .from("participants")
+    .insert({
+      session_id: id,
+      user_id: newParticipantId,
+    });
+
+  if (insertError) {
+    throw new Error(`Unable to join session: ${insertError.message}`);
   }
 
-  sessions.set(id, session);
+  if (participantIds.length + 1 >= session.max_players && session.status !== "active") {
+    const { error: updateError } = await supabase
+      .from("sessions")
+      .update({ status: "active" })
+      .eq("id", id);
 
-  return session;
+    if (updateError) {
+      throw new Error(`Unable to update session status: ${updateError.message}`);
+    }
+  }
+
+  const { data: updatedSession, error: refetchError } = await supabase
+    .from("sessions")
+    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .eq("id", id)
+    .single();
+
+  if (refetchError || !updatedSession) {
+    throw new Error(`Failed to refresh session: ${refetchError?.message ?? "unknown error"}`);
+  }
+
+  return mapRowToSession(updatedSession);
 }

@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const session = joinSession(id);
+    const session = await joinSession(id);
     return NextResponse.json({ data: session });
   } catch (error) {
     if (error instanceof Error) {

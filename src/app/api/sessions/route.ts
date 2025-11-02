@@ -5,8 +5,21 @@ import {
   type CreateSessionPayload,
 } from "@/services/session-store";
 
-export function GET() {
-  return NextResponse.json({ data: listSessions() });
+export async function GET() {
+  try {
+    const sessions = await listSessions();
+    return NextResponse.json({ data: sessions });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load sessions",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -37,10 +50,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const session = createSession({
-    title,
-    maxPlayers,
-  });
+  try {
+    const session = await createSession({
+      title,
+      maxPlayers,
+    });
 
-  return NextResponse.json({ data: session }, { status: 201 });
+    return NextResponse.json({ data: session }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create session",
+      },
+      { status: 500 },
+    );
+  }
 }

@@ -40,8 +40,8 @@ function mapRowToSession(row: SessionRow): Session {
   };
 }
 
-async function fetchSessionById(id: string) {
-  const supabase = getSupabaseServerClient();
+async function fetchSessionById(id: string, accessToken?: string) {
+  const supabase = getSupabaseServerClient(accessToken);
   const { data, error } = await supabase
     .from("sessions")
     .select("id,title,max_players,status,created_at,participants(user_id)")
@@ -55,8 +55,8 @@ async function fetchSessionById(id: string) {
   return data ?? null;
 }
 
-export async function listSessions(): Promise<Session[]> {
-  const supabase = getSupabaseServerClient();
+export async function listSessions(accessToken?: string): Promise<Session[]> {
+  const supabase = getSupabaseServerClient(accessToken);
 
   const { data, error } = await supabase
     .from("sessions")
@@ -72,9 +72,10 @@ export async function listSessions(): Promise<Session[]> {
 
 export async function createSession(
   payload: CreateSessionPayload,
-  userId?: string,
+  userId: string,
+  accessToken: string,
 ): Promise<Session> {
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServerClient(accessToken);
 
   const { data, error } = await supabase
     .from("sessions")
@@ -90,35 +91,37 @@ export async function createSession(
     throw new Error(`Failed to create session: ${error?.message ?? "unknown error"}`);
   }
 
-  if (userId) {
-    await supabase
-      .from("participants")
-      .upsert(
-        {
-          session_id: data.id,
-          user_id: userId,
-        },
-        { onConflict: "session_id,user_id" },
-      );
-  }
+  await supabase
+    .from("participants")
+    .upsert(
+      {
+        session_id: data.id,
+        user_id: userId,
+      },
+      { onConflict: "session_id,user_id" },
+    );
 
-  const withParticipants = await fetchSessionById(data.id);
+  const withParticipants = await fetchSessionById(data.id, accessToken);
 
   if (!withParticipants) {
-    return mapRowToSession({ ...data, participants: userId ? [{ user_id: userId }] : [] });
+    throw new Error("Failed to reload session after creation.");
   }
 
   return mapRowToSession(withParticipants);
 }
 
-export async function joinSession(id: string, userId: string): Promise<Session> {
-  const session = await fetchSessionById(id);
+export async function joinSession(
+  id: string,
+  userId: string,
+  accessToken: string,
+): Promise<Session> {
+  const session = await fetchSessionById(id, accessToken);
 
   if (!session) {
     throw new Error("Session not found");
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServerClient(accessToken);
   const participantIds =
     session.participants?.map((participant) => participant.user_id) ?? [];
 
@@ -155,7 +158,7 @@ export async function joinSession(id: string, userId: string): Promise<Session> 
     }
   }
 
-  const updatedSession = await fetchSessionById(id);
+  const updatedSession = await fetchSessionById(id, accessToken);
 
   if (!updatedSession) {
     throw new Error("Failed to reload session after join.");

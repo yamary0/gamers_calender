@@ -3,6 +3,14 @@ import { NextResponse } from "next/server";
 import { joinSession } from "@/services/session-store";
 import { getUserFromRequest } from "@/lib/auth-server";
 
+const extractAccessToken = (request: Request) => {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7);
+  }
+  return null;
+};
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -18,7 +26,16 @@ export async function POST(
       );
     }
 
-    const session = await joinSession(id, user.id);
+    const accessToken = extractAccessToken(request);
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: "Missing bearer token." },
+        { status: 401 },
+      );
+    }
+
+    const session = await joinSession(id, user.id, accessToken);
     return NextResponse.json({ data: session });
   } catch (error) {
     if (error instanceof Error) {

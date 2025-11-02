@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/auth-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,29 +28,31 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="flex min-h-screen flex-col bg-background text-foreground">
-          <header className="border-b">
-            <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-4">
-              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Gamers Calendar
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Local MVP build
-              </span>
-            </div>
-          </header>
+        <AuthProvider>
+          <div className="flex min-h-screen flex-col bg-background text-foreground">
+            <header className="border-b">
+              <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4 px-6 py-4">
+                <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Gamers Calendar
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Local MVP build
+                </span>
+              </div>
+            </header>
 
-          <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10">
-            {children}
-          </main>
+            <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10">
+              {children}
+            </main>
 
-          <footer className="border-t">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <span>© {new Date().getFullYear()} Gamers Calendar.</span>
-              <span>Phase-based local development build.</span>
-            </div>
-          </footer>
-        </div>
+            <footer className="border-t">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>© {new Date().getFullYear()} Gamers Calendar.</span>
+                <span>Phase-based local development build.</span>
+              </div>
+            </footer>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

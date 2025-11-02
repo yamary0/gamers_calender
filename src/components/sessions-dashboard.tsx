@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useAuth } from "@/components/auth-provider";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
@@ -23,9 +24,33 @@ export function SessionsDashboard({
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authFeedback, setAuthFeedback] = useState<string | null>(null);
+
+  const {
+    user,
+    session,
+    loading: authLoading,
+    authError,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+    refreshSession,
+  } = useAuth();
+
+  const accessToken = session?.access_token ?? null;
+  const canMutate = Boolean(accessToken);
 
   async function refreshSessions() {
-    const response = await fetch("/api/sessions", { cache: "no-store" });
+    const headers: HeadersInit = accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : {};
+    const response = await fetch("/api/sessions", {
+      cache: "no-store",
+      headers,
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch sessions: ${response.status}`);
     }
@@ -33,8 +58,36 @@ export function SessionsDashboard({
     setSessions(data.data);
   }
 
+  const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
+    event,
+  ) => {
+    event.preventDefault();
+    setAuthFeedback(null);
+    if (!email || !password) {
+      setAuthFeedback("Email and password are required.");
+      return;
+    }
+
+    if (authMode === "signIn") {
+      await signInWithEmail(email, password);
+      await refreshSession();
+    } else {
+      await signUpWithEmail(email, password);
+      setAuthFeedback("Sign up successful. Confirm your email before signing in.");
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    await refreshSession();
+  };
+
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (!canMutate) {
+      setFormError("Sign in to create sessions.");
+      return;
+    }
     const form = event.currentTarget;
     const formData = new FormData(form);
     const title = String(formData.get("title") ?? "").trim();
@@ -43,9 +96,16 @@ export function SessionsDashboard({
     startTransition(async () => {
       setFormError(null);
       try {
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+
         const response = await fetch("/api/sessions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ title, maxPlayers }),
         });
 
@@ -67,11 +127,21 @@ export function SessionsDashboard({
   };
 
   function handleJoin(sessionId: string) {
+    if (!canMutate) {
+      setFormError("Sign in to join sessions.");
+      return;
+    }
     startTransition(async () => {
       setFormError(null);
       try {
+        const headers: HeadersInit = {};
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+
         const response = await fetch(`/api/sessions/${sessionId}/join`, {
           method: "POST",
+          headers,
         });
 
         if (!response.ok) {
@@ -94,6 +164,101 @@ export function SessionsDashboard({
     <section className="space-y-6">
       <Card>
         <CardHeader>
+          <CardTitle>Authentication</CardTitle>
+          <CardDescription>
+            Sign in to create and join sessions. Accounts use email + password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {authLoading ? (
+            <p className="text-sm text-muted-foreground">Loading session…</p>
+          ) : user ? (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
+                <p className="font-medium text-foreground">
+                  Signed in as {user.email ?? user.id}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  User ID: {user.id}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSignOut}
+                  disabled={isPending}
+                >
+                  Sign out
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Refresh the page after signing out to clear server state.
+                </span>
+              </div>
+            </div>
+          ) : (
+            <form className="space-y-4" onSubmit={handleAuthSubmit}>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={authMode === "signIn" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAuthMode("signIn")}
+                >
+                  Sign in
+                </Button>
+                <Button
+                  type="button"
+                  variant={authMode === "signUp" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAuthMode("signUp")}
+                >
+                  Sign up
+                </Button>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-email">
+                  Email
+                </label>
+                <input
+                  id="auth-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-password">
+                  Password
+                </label>
+                <input
+                  id="auth-password"
+                  type="password"
+                  required
+                  value={password}
+                  minLength={6}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  placeholder="At least 6 characters"
+                />
+              </div>
+              <Button type="submit">
+                {authMode === "signIn" ? "Sign in" : "Create account"}
+              </Button>
+              {authError && <ErrorToast message={authError} />}
+              {authFeedback && (
+                <p className="text-xs text-muted-foreground">{authFeedback}</p>
+              )}
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Create session</CardTitle>
           <CardDescription>
             Provide a title and headcount to open a new slot.
@@ -112,6 +277,7 @@ export function SessionsDashboard({
                 minLength={3}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 placeholder="Friday Night Raid"
+                disabled={!canMutate || isPending}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -129,10 +295,11 @@ export function SessionsDashboard({
                 type="number"
                 className="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 placeholder="5"
+                disabled={!canMutate || isPending}
               />
             </div>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : "Create"}
+            <Button type="submit" disabled={isPending || !canMutate}>
+              {!canMutate ? "Sign in to create" : isPending ? "Saving..." : "Create"}
             </Button>
           </form>
         </CardContent>
@@ -203,9 +370,15 @@ export function SessionsDashboard({
                   <Button
                     type="button"
                     onClick={() => handleJoin(session.id)}
-                    disabled={isPending || isFull}
+                    disabled={isPending || isFull || !canMutate}
                   >
-                    {isFull ? "Ready" : isPending ? "Joining..." : "Join"}
+                    {!canMutate
+                      ? "Sign in"
+                      : isFull
+                        ? "Ready"
+                        : isPending
+                          ? "Joining..."
+                          : "Join"}
                   </Button>
                 </li>
               );

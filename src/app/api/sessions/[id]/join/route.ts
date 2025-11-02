@@ -1,14 +1,24 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { joinSession } from "@/services/session-store";
+import { getUserFromRequest } from "@/lib/auth-server";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await context.params;
-    const session = await joinSession(id);
+    const user = await getUserFromRequest(request);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required to join sessions." },
+        { status: 401 },
+      );
+    }
+
+    const session = await joinSession(id, user.id);
     return NextResponse.json({ data: session });
   } catch (error) {
     if (error instanceof Error) {

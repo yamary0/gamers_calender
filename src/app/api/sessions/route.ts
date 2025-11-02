@@ -4,6 +4,7 @@ import {
   listSessions,
   type CreateSessionPayload,
 } from "@/services/session-store";
+import { getUserFromRequest } from "@/lib/auth-server";
 
 export async function GET() {
   try {
@@ -51,10 +52,22 @@ export async function POST(request: Request) {
   }
 
   try {
-    const session = await createSession({
-      title,
-      maxPlayers,
-    });
+    const user = await getUserFromRequest(request);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required to create sessions." },
+        { status: 401 },
+      );
+    }
+
+    const session = await createSession(
+      {
+        title,
+        maxPlayers,
+      },
+      user.id,
+    );
 
     return NextResponse.json({ data: session }, { status: 201 });
   } catch (error) {

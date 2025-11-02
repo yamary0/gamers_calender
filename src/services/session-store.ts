@@ -40,6 +40,21 @@ function mapRowToSession(row: SessionRow): Session {
   };
 }
 
+async function fetchSessionById(id: string) {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load session: ${error.message}`);
+  }
+
+  return data ?? null;
+}
+
 export async function listSessions(): Promise<Session[]> {
   const supabase = getSupabaseServerClient();
 
@@ -57,6 +72,7 @@ export async function listSessions(): Promise<Session[]> {
 
 export async function createSession(
   payload: CreateSessionPayload,
+  userId?: string,
 ): Promise<Session> {
   const supabase = getSupabaseServerClient();
 
@@ -74,40 +90,55 @@ export async function createSession(
     throw new Error(`Failed to create session: ${error?.message ?? "unknown error"}`);
   }
 
-  return mapRowToSession({ ...data, participants: [] });
+  if (userId) {
+    await supabase
+      .from("participants")
+      .upsert(
+        {
+          session_id: data.id,
+          user_id: userId,
+        },
+        { onConflict: "session_id,user_id" },
+      );
+  }
+
+  const withParticipants = await fetchSessionById(data.id);
+
+  if (!withParticipants) {
+    return mapRowToSession({ ...data, participants: userId ? [{ user_id: userId }] : [] });
+  }
+
+  return mapRowToSession(withParticipants);
 }
 
-export async function joinSession(id: string): Promise<Session> {
-  const supabase = getSupabaseServerClient();
-
-  const { data: session, error: sessionError } = await supabase
-    .from("sessions")
-    .select("id,title,max_players,status,created_at,participants(user_id)")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (sessionError) {
-    throw new Error(`Failed to load session: ${sessionError.message}`);
-  }
+export async function joinSession(id: string, userId: string): Promise<Session> {
+  const session = await fetchSessionById(id);
 
   if (!session) {
     throw new Error("Session not found");
   }
 
-  const participantIds = session.participants?.map((participant) => participant.user_id) ?? [];
+  const supabase = getSupabaseServerClient();
+  const participantIds =
+    session.participants?.map((participant) => participant.user_id) ?? [];
+
+  if (participantIds.includes(userId)) {
+    return mapRowToSession(session);
+  }
 
   if (participantIds.length >= session.max_players || session.status === "active") {
     throw new Error("Session is full");
   }
 
-  const newParticipantId = crypto.randomUUID();
-
   const { error: insertError } = await supabase
     .from("participants")
-    .insert({
-      session_id: id,
-      user_id: newParticipantId,
-    });
+    .upsert(
+      {
+        session_id: id,
+        user_id: userId,
+      },
+      { onConflict: "session_id,user_id" },
+    );
 
   if (insertError) {
     throw new Error(`Unable to join session: ${insertError.message}`);
@@ -124,14 +155,10 @@ export async function joinSession(id: string): Promise<Session> {
     }
   }
 
-  const { data: updatedSession, error: refetchError } = await supabase
-    .from("sessions")
-    .select("id,title,max_players,status,created_at,participants(user_id)")
-    .eq("id", id)
-    .single();
+  const updatedSession = await fetchSessionById(id);
 
-  if (refetchError || !updatedSession) {
-    throw new Error(`Failed to refresh session: ${refetchError?.message ?? "unknown error"}`);
+  if (!updatedSession) {
+    throw new Error("Failed to reload session after join.");
   }
 
   return mapRowToSession(updatedSession);

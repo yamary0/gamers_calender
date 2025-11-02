@@ -31,6 +31,17 @@ type CalendarDay = {
   sessions: Session[];
 };
 
+const sessionReferenceDate = (session: Session): Date => {
+  switch (session.schedule.kind) {
+    case "all-day":
+      return parseISO(session.schedule.date);
+    case "timed":
+      return parseISO(session.schedule.startAt);
+    default:
+      return parseISO(session.createdAt);
+  }
+};
+
 function buildCalendarMatrix(activeDate: Date, sessions: Session[]): CalendarDay[][] {
   const monthStart = startOfMonth(activeDate);
   const monthEnd = endOfMonth(activeDate);
@@ -40,7 +51,7 @@ function buildCalendarMatrix(activeDate: Date, sessions: Session[]): CalendarDay
   const sessionByDate = new Map<string, Session[]>();
 
   sessions.forEach((session) => {
-    const dayKey = format(parseISO(session.createdAt), "yyyy-MM-dd");
+    const dayKey = format(sessionReferenceDate(session), "yyyy-MM-dd");
     const list = sessionByDate.get(dayKey) ?? [];
     list.push(session);
     sessionByDate.set(dayKey, list);
@@ -129,20 +140,38 @@ export function SessionsCalendar({ sessions }: Props) {
                   {format(day.date, "d")}
                 </span>
                 <div className="flex flex-col gap-1">
-                  {day.sessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] leading-tight text-muted-foreground"
-                    >
-                      <p className="font-medium text-foreground">{session.title}</p>
-                      <p>
-                        {session.participants.length}/{session.maxPlayers} players
-                      </p>
-                      <p className="uppercase tracking-wide text-[10px]">
-                        {session.status}
-                      </p>
-                    </div>
-                  ))}
+                  {day.sessions.map((session) => {
+                    const scheduleLabel = (() => {
+                      switch (session.schedule.kind) {
+                        case "all-day":
+                          return "All day";
+                        case "timed":
+                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${
+                            session.schedule.endAt
+                              ? ` – ${format(parseISO(session.schedule.endAt), "HH:mm")}`
+                              : ""
+                          }`;
+                        default:
+                          return "No schedule";
+                      }
+                    })();
+
+                    return (
+                      <div
+                        key={session.id}
+                        className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] leading-tight text-muted-foreground"
+                      >
+                        <p className="font-medium text-foreground">{session.title}</p>
+                        <p>
+                          {session.participants.length}/{session.maxPlayers} players
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{scheduleLabel}</p>
+                        <p className="uppercase tracking-wide text-[10px]">
+                          {session.status}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )),

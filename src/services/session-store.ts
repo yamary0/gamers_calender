@@ -2,6 +2,11 @@ import { getSupabaseServiceClient } from "@/lib/supabase";
 
 export type SessionStatus = "open" | "active";
 
+export type SessionSchedule =
+  | { kind: "none" }
+  | { kind: "all-day"; date: string }
+  | { kind: "timed"; startAt: string; endAt: string | null };
+
 export type Session = {
   id: string;
   title: string;
@@ -9,17 +14,25 @@ export type Session = {
   status: SessionStatus;
   participants: string[];
   createdAt: string;
+  schedule: SessionSchedule;
+};
+
+export type SessionMutationResult = {
+  session: Session;
+  activated: boolean;
 };
 
 export type CreateSessionPayload = {
   title: string;
   maxPlayers: number;
+  schedule: SessionSchedule;
 };
 
 export type UpdateSessionPayload = Partial<{
   title: string;
   maxPlayers: number;
   status: SessionStatus;
+  schedule: SessionSchedule;
 }>;
 
 type SessionRow = {
@@ -28,33 +41,69 @@ type SessionRow = {
   max_players: number;
   status: string;
   created_at: string;
+  start_at: string | null;
+  end_at: string | null;
+  all_day: boolean | null;
   participants?: Array<{ user_id: string }>;
 };
 
-function admin() {
-  return getSupabaseServiceClient();
-}
+type ScheduleColumns = {
+  start_at: string | null;
+  end_at: string | null;
+  all_day: boolean | null;
+};
 
-function mapStatus(value: string): SessionStatus {
-  return value === "active" ? "active" : "open";
-}
+const admin = () => getSupabaseServiceClient();
 
-function mapRowToSession(row: SessionRow): Session {
-  return {
-    id: row.id,
-    title: row.title,
-    maxPlayers: row.max_players,
-    status: mapStatus(row.status),
-    participants: row.participants?.map((participant) => participant.user_id) ?? [],
-    createdAt: row.created_at,
-  };
-}
+const mapStatus = (value: string): SessionStatus =>
+  value === "active" ? "active" : "open";
+
+const mapRowSchedule = (row: SessionRow): SessionSchedule => {
+  if (!row.start_at) {
+    return { kind: "none" };
+  }
+
+  if (row.all_day) {
+    return { kind: "all-day", date: row.start_at };
+  }
+
+  return { kind: "timed", startAt: row.start_at, endAt: row.end_at };
+};
+
+const mapRowToSession = (row: SessionRow): Session => ({
+  id: row.id,
+  title: row.title,
+  maxPlayers: row.max_players,
+  status: mapStatus(row.status),
+  participants: row.participants?.map((participant) => participant.user_id) ?? [],
+  createdAt: row.created_at,
+  schedule: mapRowSchedule(row),
+});
+
+const scheduleToColumns = (schedule: SessionSchedule): ScheduleColumns => {
+  switch (schedule.kind) {
+    case "none":
+      return { start_at: null, end_at: null, all_day: false };
+    case "all-day":
+      return { start_at: schedule.date, end_at: null, all_day: true };
+    case "timed":
+      return {
+        start_at: schedule.startAt,
+        end_at: schedule.endAt ?? null,
+        all_day: false,
+      };
+    default:
+      return { start_at: null, end_at: null, all_day: false };
+  }
+};
 
 async function fetchSessionById(id: string): Promise<SessionRow | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("sessions")
-    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .select(
+      "id,title,max_players,status,created_at,start_at,end_at,all_day,participants(user_id)",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -84,7 +133,9 @@ export async function listSessions(): Promise<Session[]> {
 
   const { data, error } = await supabase
     .from("sessions")
-    .select("id,title,max_players,status,created_at,participants(user_id)")
+    .select(
+      "id,title,max_players,status,created_at,start_at,end_at,all_day,participants(user_id)",
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -94,16 +145,12 @@ export async function listSessions(): Promise<Session[]> {
   return (data ?? []).map(mapRowToSession);
 }
 
-export type SessionMutationResult = {
-  session: Session;
-  activated: boolean;
-};
-
 export async function createSession(
   payload: CreateSessionPayload,
   userId: string,
 ): Promise<SessionMutationResult> {
   const supabase = admin();
+  const scheduleCols = scheduleToColumns(payload.schedule);
 
   const { data, error } = await supabase
     .from("sessions")
@@ -111,8 +158,13 @@ export async function createSession(
       title: payload.title,
       max_players: payload.maxPlayers,
       status: "open",
+      start_at: scheduleCols.start_at,
+      end_at: scheduleCols.end_at,
+      all_day: scheduleCols.all_day,
     })
-    .select("id,title,max_players,status,created_at")
+    .select(
+      "id,title,max_players,status,created_at,start_at,end_at,all_day",
+    )
     .single();
 
   if (error || !data) {
@@ -134,7 +186,8 @@ export async function createSession(
   }
 
   const count = await participantCount(data.id);
-  const shouldActivate = count >= payload.maxPlayers && data.status !== "active";
+  const shouldActivate =
+    count >= payload.maxPlayers && data.status !== "active";
 
   if (shouldActivate) {
     await supabase.from("sessions").update({ status: "active" }).eq("id", data.id);
@@ -156,7 +209,12 @@ export async function updateSession(
   id: string,
   payload: UpdateSessionPayload,
 ): Promise<SessionMutationResult> {
-  if (!payload.title && payload.maxPlayers === undefined && payload.status === undefined) {
+  if (
+    payload.title === undefined &&
+    payload.maxPlayers === undefined &&
+    payload.status === undefined &&
+    payload.schedule === undefined
+  ) {
     throw new Error("Nothing to update.");
   }
 
@@ -177,6 +235,12 @@ export async function updateSession(
   }
   if (payload.status !== undefined) {
     updates.status = payload.status;
+  }
+  if (payload.schedule !== undefined) {
+    const scheduleCols = scheduleToColumns(payload.schedule);
+    updates.start_at = scheduleCols.start_at;
+    updates.end_at = scheduleCols.end_at;
+    updates.all_day = scheduleCols.all_day;
   }
 
   if (Object.keys(updates).length > 0) {
@@ -217,13 +281,6 @@ export async function updateSession(
     if (!refreshed) {
       throw new Error("Failed to reload session after activation.");
     }
-  } else if (
-    payload.status === "open" &&
-    refreshed.status === "open" &&
-    count < maxPlayers &&
-    existing.status === "active"
-  ) {
-    // Deactivation requested explicitly and allowed because there is room.
   }
 
   return {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { format, parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,8 @@ type SessionsDashboardProps = {
   initialSessions: Session[];
 };
 
+type ScheduleKind = "none" | "all-day" | "timed";
+
 export function SessionsDashboard({
   initialSessions,
 }: SessionsDashboardProps) {
@@ -32,6 +35,16 @@ export function SessionsDashboard({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editMaxPlayers, setEditMaxPlayers] = useState<string>("1");
+  const [createScheduleKind, setCreateScheduleKind] =
+    useState<ScheduleKind>("none");
+  const [createAllDayDate, setCreateAllDayDate] = useState("");
+  const [createStartAt, setCreateStartAt] = useState("");
+  const [createEndAt, setCreateEndAt] = useState("");
+  const [editScheduleKind, setEditScheduleKind] =
+    useState<ScheduleKind>("none");
+  const [editAllDayDate, setEditAllDayDate] = useState("");
+  const [editStartAt, setEditStartAt] = useState("");
+  const [editEndAt, setEditEndAt] = useState("");
 
   const {
     user,
@@ -63,14 +76,83 @@ export function SessionsDashboard({
     setSessions(data.data);
   }
 
+  const getScheduleStartInstant = (session: Session) => {
+    switch (session.schedule.kind) {
+      case "all-day":
+        return parseISO(session.schedule.date).getTime();
+      case "timed":
+        return parseISO(session.schedule.startAt).getTime();
+      default:
+        return parseISO(session.createdAt).getTime();
+    }
+  };
+
   const calendarSessions = useMemo(
     () =>
       [...sessions].sort(
         (first, second) =>
-          new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+          getScheduleStartInstant(first) - getScheduleStartInstant(second),
       ),
     [sessions],
   );
+
+  const formatDateInput = (iso: string) => format(parseISO(iso), "yyyy-MM-dd");
+  const formatDateTimeInput = (iso: string) =>
+    format(parseISO(iso), "yyyy-MM-dd'T'HH:mm");
+
+  const buildSchedulePayload = (
+    kind: ScheduleKind,
+    allDayDate: string,
+    startValue: string,
+    endValue: string,
+  ): Session["schedule"] => {
+    if (kind === "none") {
+      return { kind: "none" };
+    }
+
+    if (kind === "all-day") {
+      if (!allDayDate) {
+        throw new Error("Select a date for all-day sessions.");
+      }
+      const iso = new Date(`${allDayDate}T00:00:00`).toISOString();
+      return { kind: "all-day", date: iso };
+    }
+
+    if (!startValue) {
+      throw new Error("Provide a start time for timed sessions.");
+    }
+
+    const startISO = new Date(startValue).toISOString();
+    let endISO: string | null = null;
+
+    if (endValue) {
+      endISO = new Date(endValue).toISOString();
+      if (new Date(endISO) <= new Date(startISO)) {
+        throw new Error("End time must be after start time.");
+      }
+    }
+
+    return { kind: "timed", startAt: startISO, endAt: endISO };
+  };
+
+  const describeSchedule = (session: Session) => {
+    switch (session.schedule.kind) {
+      case "all-day":
+        return `All day · ${format(parseISO(session.schedule.date), "MMM d, yyyy")}`;
+      case "timed": {
+        const startLabel = format(
+          parseISO(session.schedule.startAt),
+          "MMM d, HH:mm",
+        );
+        const endLabel = session.schedule.endAt
+          ? format(parseISO(session.schedule.endAt), "HH:mm")
+          : null;
+        return `Scheduled · ${startLabel}${endLabel ? ` – ${endLabel}` : ""}`;
+      }
+      default:
+        return "No schedule set";
+    }
+  };
 
   const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
     event,
@@ -101,12 +183,40 @@ export function SessionsDashboard({
     setEditingSessionId(sessionToEdit.id);
     setEditTitle(sessionToEdit.title);
     setEditMaxPlayers(String(sessionToEdit.maxPlayers));
+    switch (sessionToEdit.schedule.kind) {
+      case "all-day":
+        setEditScheduleKind("all-day");
+        setEditAllDayDate(formatDateInput(sessionToEdit.schedule.date));
+        setEditStartAt("");
+        setEditEndAt("");
+        break;
+      case "timed":
+        setEditScheduleKind("timed");
+        setEditAllDayDate("");
+        setEditStartAt(formatDateTimeInput(sessionToEdit.schedule.startAt));
+        setEditEndAt(
+          sessionToEdit.schedule.endAt
+            ? formatDateTimeInput(sessionToEdit.schedule.endAt)
+            : "",
+        );
+        break;
+      default:
+        setEditScheduleKind("none");
+        setEditAllDayDate("");
+        setEditStartAt("");
+        setEditEndAt("");
+        break;
+    }
   };
 
   const cancelEditing = () => {
     setEditingSessionId(null);
     setEditTitle("");
     setEditMaxPlayers("1");
+    setEditScheduleKind("none");
+    setEditAllDayDate("");
+    setEditStartAt("");
+    setEditEndAt("");
   };
 
   const handleEditSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
@@ -124,6 +234,12 @@ export function SessionsDashboard({
       try {
         const title = editTitle.trim();
         const maxPlayers = Number(editMaxPlayers);
+        const schedule = buildSchedulePayload(
+          editScheduleKind,
+          editAllDayDate,
+          editStartAt,
+          editEndAt,
+        );
         const headers: HeadersInit = {
           "Content-Type": "application/json",
         };
@@ -134,7 +250,7 @@ export function SessionsDashboard({
         const response = await fetch(`/api/sessions/${editingSessionId}`, {
           method: "PATCH",
           headers,
-          body: JSON.stringify({ title, maxPlayers }),
+          body: JSON.stringify({ title, maxPlayers, schedule }),
         });
 
         if (!response.ok) {
@@ -221,11 +337,17 @@ export function SessionsDashboard({
         if (accessToken) {
           headers.Authorization = `Bearer ${accessToken}`;
         }
+        const schedule = buildSchedulePayload(
+          createScheduleKind,
+          createAllDayDate,
+          createStartAt,
+          createEndAt,
+        );
 
         const response = await fetch("/api/sessions", {
           method: "POST",
           headers,
-          body: JSON.stringify({ title, maxPlayers }),
+          body: JSON.stringify({ title, maxPlayers, schedule }),
         });
 
         if (!response.ok) {
@@ -236,6 +358,10 @@ export function SessionsDashboard({
         }
 
         form.reset();
+        setCreateScheduleKind("none");
+        setCreateAllDayDate("");
+        setCreateStartAt("");
+        setCreateEndAt("");
         await refreshSessions();
       } catch (error) {
         setFormError(
@@ -437,6 +563,84 @@ export function SessionsDashboard({
                 disabled={!canMutate || isPending}
               />
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-muted-foreground">
+                Schedule
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={createScheduleKind === "none" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateScheduleKind("none")}
+                >
+                  None
+                </Button>
+                <Button
+                  type="button"
+                  variant={createScheduleKind === "all-day" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateScheduleKind("all-day")}
+                >
+                  All day
+                </Button>
+                <Button
+                  type="button"
+                  variant={createScheduleKind === "timed" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCreateScheduleKind("timed")}
+                >
+                  Timed
+                </Button>
+              </div>
+              {createScheduleKind === "all-day" && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="create-all-day-date">
+                    Date
+                  </label>
+                  <input
+                    id="create-all-day-date"
+                    type="date"
+                    value={createAllDayDate}
+                    onChange={(event) => setCreateAllDayDate(event.target.value)}
+                    className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    disabled={!canMutate || isPending}
+                    required
+                  />
+                </div>
+              )}
+              {createScheduleKind === "timed" && (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-start-at">
+                      Start
+                    </label>
+                    <input
+                      id="create-start-at"
+                      type="datetime-local"
+                      value={createStartAt}
+                      onChange={(event) => setCreateStartAt(event.target.value)}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      disabled={!canMutate || isPending}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-end-at">
+                      End (optional)
+                    </label>
+                    <input
+                      id="create-end-at"
+                      type="datetime-local"
+                      value={createEndAt}
+                      onChange={(event) => setCreateEndAt(event.target.value)}
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      disabled={!canMutate || isPending}
+                    />
+                  </div>
+                </div>
+              )}
+            </fieldset>
             <Button type="submit" disabled={isPending || !canMutate}>
               {!canMutate ? "Sign in to create" : isPending ? "Saving..." : "Create"}
             </Button>
@@ -509,6 +713,12 @@ export function SessionsDashboard({
                           {participants}
                         </span>
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        Schedule:{" "}
+                        <span className="font-medium text-foreground">
+                          {describeSchedule(session)}
+                        </span>
+                      </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
@@ -576,6 +786,81 @@ export function SessionsDashboard({
                           className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                         />
                       </div>
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium text-muted-foreground">
+                          Schedule
+                        </legend>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant={editScheduleKind === "none" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setEditScheduleKind("none")}
+                          >
+                            None
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={editScheduleKind === "all-day" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setEditScheduleKind("all-day")}
+                          >
+                            All day
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={editScheduleKind === "timed" ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setEditScheduleKind("timed")}
+                          >
+                            Timed
+                          </Button>
+                        </div>
+                        {editScheduleKind === "all-day" && (
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-all-day-${session.id}`}>
+                              Date
+                            </label>
+                            <input
+                              id={`edit-all-day-${session.id}`}
+                              type="date"
+                              value={editAllDayDate}
+                              onChange={(event) => setEditAllDayDate(event.target.value)}
+                              className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                              required
+                            />
+                          </div>
+                        )}
+                        {editScheduleKind === "timed" && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-start-${session.id}`}>
+                                Start
+                              </label>
+                              <input
+                                id={`edit-start-${session.id}`}
+                                type="datetime-local"
+                                value={editStartAt}
+                                onChange={(event) => setEditStartAt(event.target.value)}
+                                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                required
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-end-${session.id}`}>
+                                End (optional)
+                              </label>
+                              <input
+                                id={`edit-end-${session.id}`}
+                                type="datetime-local"
+                                value={editEndAt}
+                                onChange={(event) => setEditEndAt(event.target.value)}
+                                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </fieldset>
                       <div className="flex gap-2">
                         <Button type="submit" disabled={isPending}>
                           Save changes

@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { parseISO, isValid as isValidDate } from "date-fns";
 import {
   deleteSession,
   updateSession,
-  type UpdateSessionPayload,
+  type SessionSchedule,
 } from "@/services/session-store";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
@@ -12,26 +13,68 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function validatePayload(payload: UpdateSessionPayload) {
-  if (payload.title !== undefined && payload.title.trim().length < 3) {
-    throw new Error("Title must be at least 3 characters long");
+type UpdateRequestBody = {
+  title?: unknown;
+  maxPlayers?: unknown;
+  status?: unknown;
+  schedule?: unknown;
+};
+
+const parseSchedule = (value: unknown): SessionSchedule => {
+  if (!value || typeof value !== "object") {
+    return { kind: "none" };
   }
 
-  if (
-    payload.maxPlayers !== undefined &&
-    (!Number.isFinite(payload.maxPlayers) || payload.maxPlayers < 1)
-  ) {
-    throw new Error("maxPlayers must be a positive integer");
+  const schedule = value as Record<string, unknown>;
+  const kind = schedule.kind;
+
+  if (kind === "all-day") {
+    const date = schedule.date;
+    if (typeof date !== "string") {
+      throw new Error("schedule.date must be provided for all-day sessions");
+    }
+    const parsed = parseISO(date);
+    if (!isValidDate(parsed)) {
+      throw new Error("schedule.date must be a valid ISO date");
+    }
+    return { kind: "all-day", date: parsed.toISOString() };
   }
 
-  if (
-    payload.status !== undefined &&
-    payload.status !== "open" &&
-    payload.status !== "active"
-  ) {
-    throw new Error("status must be either 'open' or 'active'");
+  if (kind === "timed") {
+    const startAt = schedule.startAt;
+    const endAt = schedule.endAt;
+
+    if (typeof startAt !== "string") {
+      throw new Error("schedule.startAt must be provided for timed sessions");
+    }
+    const parsedStart = parseISO(startAt);
+    if (!isValidDate(parsedStart)) {
+      throw new Error("schedule.startAt must be a valid ISO datetime");
+    }
+
+    let parsedEnd: Date | null = null;
+    if (endAt !== undefined && endAt !== null) {
+      if (typeof endAt !== "string") {
+        throw new Error("schedule.endAt must be a string when provided");
+      }
+      parsedEnd = parseISO(endAt);
+      if (!isValidDate(parsedEnd)) {
+        throw new Error("schedule.endAt must be a valid ISO datetime");
+      }
+      if (parsedEnd <= parsedStart) {
+        throw new Error("schedule.endAt must be after schedule.startAt");
+      }
+    }
+
+    return {
+      kind: "timed",
+      startAt: parsedStart.toISOString(),
+      endAt: parsedEnd ? parsedEnd.toISOString() : null,
+    };
   }
-}
+
+  return { kind: "none" };
+};
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
@@ -45,7 +88,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const body = (await request.json().catch(() => null)) as UpdateSessionPayload | null;
+    const body = (await request.json().catch(() => null)) as UpdateRequestBody | null;
 
     if (!body) {
       return NextResponse.json(
@@ -54,28 +97,57 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    try {
-      validatePayload(body);
-    } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "Invalid payload" },
-        { status: 422 },
-      );
-    }
-
-    const sanitized: UpdateSessionPayload = {};
+    const updates: Parameters<typeof updateSession>[1] = {};
 
     if (body.title !== undefined) {
-      sanitized.title = body.title.trim();
-    }
-    if (body.maxPlayers !== undefined) {
-      sanitized.maxPlayers = Math.floor(body.maxPlayers);
-    }
-    if (body.status !== undefined) {
-      sanitized.status = body.status;
+      if (typeof body.title !== "string" || body.title.trim().length < 3) {
+        return NextResponse.json(
+          { error: "title must be at least 3 characters long" },
+          { status: 422 },
+        );
+      }
+      updates.title = body.title.trim();
     }
 
-    const { session, activated } = await updateSession(id, sanitized);
+    if (body.maxPlayers !== undefined) {
+      if (
+        typeof body.maxPlayers !== "number" ||
+        !Number.isFinite(body.maxPlayers) ||
+        body.maxPlayers < 1
+      ) {
+        return NextResponse.json(
+          { error: "maxPlayers must be a positive integer" },
+          { status: 422 },
+        );
+      }
+      updates.maxPlayers = Math.floor(body.maxPlayers);
+    }
+
+    if (body.status !== undefined) {
+      if (body.status !== "open" && body.status !== "active") {
+        return NextResponse.json(
+          { error: "status must be either 'open' or 'active'" },
+          { status: 422 },
+        );
+      }
+      updates.status = body.status;
+    }
+
+    if (body.schedule !== undefined) {
+      try {
+        updates.schedule = parseSchedule(body.schedule);
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error ? error.message : "Invalid schedule payload",
+          },
+          { status: 422 },
+        );
+      }
+    }
+
+    const { session, activated } = await updateSession(id, updates);
 
     if (activated) {
       await sendDiscordNotification({

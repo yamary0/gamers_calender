@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
@@ -44,18 +44,29 @@ export function SessionsDashboard({
 
   const accessToken = session?.access_token ?? null;
   const canMutate = Boolean(accessToken);
- 
   async function refreshSessions() {
+    if (!canMutate) {
+      setSessions([]);
+      return;
+    }
+
     const headers: HeadersInit = accessToken
       ? { Authorization: `Bearer ${accessToken}` }
       : {};
+
     const response = await fetch("/api/sessions", {
       cache: "no-store",
       headers,
     });
+
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        setSessions([]);
+        return;
+      }
       throw new Error(`Failed to fetch sessions: ${response.status}`);
     }
+
     const data = (await response.json()) as { data: Session[] };
     setSessions(data.data);
   }
@@ -92,6 +103,50 @@ export function SessionsDashboard({
       ),
     [sessions],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!canMutate) {
+      setSessions([]);
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const headers: HeadersInit = accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : {};
+        const response = await fetch("/api/sessions", {
+          cache: "no-store",
+          headers,
+        });
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            if (!cancelled) {
+              setSessions([]);
+            }
+            return;
+          }
+          throw new Error(`Failed to fetch sessions: ${response.status}`);
+        }
+        const data = (await response.json()) as { data: Session[] };
+        if (!cancelled) {
+          setSessions(data.data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFormError(
+            error instanceof Error ? error.message : "Unable to load sessions.",
+          );
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canMutate, accessToken]);
 
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -419,7 +474,9 @@ export function SessionsDashboard({
               <ul className="space-y-3">
                 {sessions.length === 0 && (
                   <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                    No sessions yet. Use + Session to add one.
+                    {canMutate
+                      ? "No sessions yet. Use + Session to add one."
+                      : "Sign in to view available sessions."}
                   </li>
                 )}
                 {sessions.map((session) => {

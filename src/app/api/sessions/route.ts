@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import {
@@ -70,8 +71,17 @@ const parseSchedule = (value: unknown): SessionSchedule => {
   return { kind: "none" };
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const user = await getUserFromRequest(request);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required to view sessions." },
+        { status: 401 },
+      );
+    }
+
     const sessions = await listSessions();
     return NextResponse.json({ data: sessions });
   } catch (error) {

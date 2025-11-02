@@ -1,7 +1,5 @@
 import { headers } from "next/headers";
-import { ErrorToast } from "@/components/error-toast";
 import { SessionsDashboard } from "@/components/sessions-dashboard";
-import { listSessions, type Session } from "@/services/session-store";
 
 const APP_NAME = "Gamers Calendar";
 
@@ -49,15 +47,6 @@ export default async function Home() {
   const ping = await fetchPing();
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
   const pingErrorMessage = !ping.pong ? ping.error : null;
-  let sessionsError: string | null = null;
-  let sessions: Session[] = [];
-
-  try {
-    sessions = await listSessions();
-  } catch (error) {
-    sessionsError =
-      error instanceof Error ? error.message : "Failed to load sessions";
-  }
 
   return (
     <div className="w-full space-y-8">
@@ -68,11 +57,7 @@ export default async function Home() {
         </p>
       </div>
 
-      {sessionsError && (
-        <ErrorToast message={`Sessions unavailable: ${sessionsError}`} />
-      )}
-
-      <SessionsDashboard initialSessions={sessions} />
+      <SessionsDashboard initialSessions={[]} />
 
       <div className="border-t border-dashed border-border pt-4 text-xs text-muted-foreground">
         <p className="font-mono">

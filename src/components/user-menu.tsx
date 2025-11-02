@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorToast } from "@/components/error-toast";
@@ -29,6 +30,7 @@ export function UserMenu() {
     signOut,
     refreshSession,
   } = useAuth();
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
@@ -82,6 +84,7 @@ export function UserMenu() {
         await signInWithEmail(email, password);
         await refreshSession();
         setOpen(false);
+        router.refresh();
       } else {
         await signUpWithEmail(email, password);
         setFeedback("Sign up successful. Check your inbox to confirm the account.");
@@ -94,6 +97,7 @@ export function UserMenu() {
       await signOut();
       await refreshSession();
       setOpen(false);
+      router.refresh();
     });
   };
 

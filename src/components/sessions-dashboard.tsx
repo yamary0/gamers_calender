@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
+import { SessionsCalendar } from "@/components/sessions-calendar";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
@@ -61,6 +62,15 @@ export function SessionsDashboard({
     const data = (await response.json()) as { data: Session[] };
     setSessions(data.data);
   }
+
+  const calendarSessions = useMemo(
+    () =>
+      [...sessions].sort(
+        (first, second) =>
+          new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+      ),
+    [sessions],
+  );
 
   const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
     event,
@@ -435,6 +445,8 @@ export function SessionsDashboard({
       </Card>
 
       {formError && <ErrorToast message={formError} />}
+
+      <SessionsCalendar sessions={calendarSessions} />
 
       <Card>
         <CardHeader>

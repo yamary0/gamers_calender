@@ -1,0 +1,154 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  addDays,
+  addMonths,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import type { Session } from "@/services/session-store";
+
+type Props = {
+  sessions: Session[];
+};
+
+type CalendarDay = {
+  date: Date;
+  isCurrentMonth: boolean;
+  sessions: Session[];
+};
+
+function buildCalendarMatrix(activeDate: Date, sessions: Session[]): CalendarDay[][] {
+  const monthStart = startOfMonth(activeDate);
+  const monthEnd = endOfMonth(activeDate);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+  const sessionByDate = new Map<string, Session[]>();
+
+  sessions.forEach((session) => {
+    const dayKey = format(parseISO(session.createdAt), "yyyy-MM-dd");
+    const list = sessionByDate.get(dayKey) ?? [];
+    list.push(session);
+    sessionByDate.set(dayKey, list);
+  });
+
+  const matrix: CalendarDay[][] = [];
+  let current = calendarStart;
+
+  while (current <= calendarEnd) {
+    const row: CalendarDay[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      const dayKey = format(current, "yyyy-MM-dd");
+      row.push({
+        date: current,
+        isCurrentMonth: isSameMonth(current, activeDate),
+        sessions: sessionByDate.get(dayKey) ?? [],
+      });
+      current = addDays(current, 1);
+    }
+    matrix.push(row);
+  }
+
+  return matrix;
+}
+
+const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function SessionsCalendar({ sessions }: Props) {
+  const [activeDate, setActiveDate] = useState(() => new Date());
+
+  const calendar = useMemo(
+    () => buildCalendarMatrix(activeDate, sessions),
+    [activeDate, sessions],
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="text-xl font-semibold">
+          Calendar Overview
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveDate(addMonths(activeDate, -1))}
+          >
+            Previous
+          </Button>
+          <div className="min-w-[140px] text-center text-sm font-medium">
+            {format(activeDate, "MMMM yyyy")}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveDate(addMonths(activeDate, 1))}
+          >
+            Next
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-7 gap-px rounded-lg border border-border bg-border text-xs font-medium text-muted-foreground">
+          {weekdayLabels.map((label) => (
+            <div
+              key={label}
+              className="bg-muted/60 px-2 py-2 text-center uppercase tracking-wide"
+            >
+              {label}
+            </div>
+          ))}
+          {calendar.map((week, weekIndex) =>
+            week.map((day) => (
+              <div
+                key={`${weekIndex}-${day.date.toISOString()}`}
+                className="flex min-h-[110px] flex-col gap-1 bg-background px-2 py-2 text-xs"
+                data-current-month={day.isCurrentMonth}
+              >
+                <span
+                  className={`font-semibold ${
+                    day.isCurrentMonth ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {format(day.date, "d")}
+                </span>
+                <div className="flex flex-col gap-1">
+                  {day.sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] leading-tight text-muted-foreground"
+                    >
+                      <p className="font-medium text-foreground">{session.title}</p>
+                      <p>
+                        {session.participants.length}/{session.maxPlayers} players
+                      </p>
+                      <p className="uppercase tracking-wide text-[10px]">
+                        {session.status}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )),
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

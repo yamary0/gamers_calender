@@ -12,6 +12,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -157,9 +158,10 @@ export function SessionsCalendar({ sessions }: Props) {
                     })();
 
                     return (
-                      <div
+                      <Link
                         key={session.id}
-                        className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] leading-tight text-muted-foreground"
+                        href={`/sessions/${session.id}`}
+                        className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] leading-tight text-muted-foreground transition hover:border-primary hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         <p className="font-medium text-foreground">{session.title}</p>
                         <p>
@@ -169,7 +171,7 @@ export function SessionsCalendar({ sessions }: Props) {
                         <p className="uppercase tracking-wide text-[10px]">
                           {session.status}
                         </p>
-                      </div>
+                      </Link>
                     );
                   })}
                 </div>

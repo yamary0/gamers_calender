@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import {
   deleteSession,
+  getSession,
   updateSession,
   type SessionSchedule,
 } from "@/services/session-store";
@@ -75,6 +76,30 @@ const parseSchedule = (value: unknown): SessionSchedule => {
 
   return { kind: "none" };
 };
+
+export async function GET(_request: NextRequest, context: RouteContext) {
+  try {
+    const { id } = await context.params;
+    const session = await getSession(id);
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Session not found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ data: session });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Unable to load session",
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {

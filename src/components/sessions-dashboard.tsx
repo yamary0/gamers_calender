@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,13 +16,15 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { SessionsCalendar } from "@/components/sessions-calendar";
 import { describeSessionSchedule } from "@/lib/session-formatters";
+import {
+  buildSchedulePayload,
+  type ScheduleKind,
+} from "@/lib/schedule-utils";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
   initialSessions: Session[];
 };
-
-type ScheduleKind = "none" | "all-day" | "timed";
 
 export function SessionsDashboard({
   initialSessions,
@@ -34,19 +36,11 @@ export function SessionsDashboard({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authFeedback, setAuthFeedback] = useState<string | null>(null);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editMaxPlayers, setEditMaxPlayers] = useState<string>("1");
   const [createScheduleKind, setCreateScheduleKind] =
     useState<ScheduleKind>("none");
   const [createAllDayDate, setCreateAllDayDate] = useState("");
   const [createStartAt, setCreateStartAt] = useState("");
   const [createEndAt, setCreateEndAt] = useState("");
-  const [editScheduleKind, setEditScheduleKind] =
-    useState<ScheduleKind>("none");
-  const [editAllDayDate, setEditAllDayDate] = useState("");
-  const [editStartAt, setEditStartAt] = useState("");
-  const [editEndAt, setEditEndAt] = useState("");
   const [activeView, setActiveView] = useState<"feed" | "calendar">("feed");
 
   const {
@@ -99,45 +93,6 @@ export function SessionsDashboard({
     [sessions],
   );
 
-  const formatDateInput = (iso: string) => format(parseISO(iso), "yyyy-MM-dd");
-  const formatDateTimeInput = (iso: string) =>
-    format(parseISO(iso), "yyyy-MM-dd'T'HH:mm");
-
-  const buildSchedulePayload = (
-    kind: ScheduleKind,
-    allDayDate: string,
-    startValue: string,
-    endValue: string,
-  ): Session["schedule"] => {
-    if (kind === "none") {
-      return { kind: "none" };
-    }
-
-    if (kind === "all-day") {
-      if (!allDayDate) {
-        throw new Error("Select a date for all-day sessions.");
-      }
-      const iso = new Date(`${allDayDate}T00:00:00`).toISOString();
-      return { kind: "all-day", date: iso };
-    }
-
-    if (!startValue) {
-      throw new Error("Provide a start time for timed sessions.");
-    }
-
-    const startISO = new Date(startValue).toISOString();
-    let endISO: string | null = null;
-
-    if (endValue) {
-      endISO = new Date(endValue).toISOString();
-      if (new Date(endISO) <= new Date(startISO)) {
-        throw new Error("End time must be after start time.");
-      }
-    }
-
-    return { kind: "timed", startAt: startISO, endAt: endISO };
-  };
-
   const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
     event,
   ) => {
@@ -160,145 +115,6 @@ export function SessionsDashboard({
   const handleSignOut = async () => {
     await signOut();
     await refreshSession();
-  };
-
-  const beginEditing = (sessionToEdit: Session) => {
-    setFormError(null);
-    setEditingSessionId(sessionToEdit.id);
-    setEditTitle(sessionToEdit.title);
-    setEditMaxPlayers(String(sessionToEdit.maxPlayers));
-    switch (sessionToEdit.schedule.kind) {
-      case "all-day":
-        setEditScheduleKind("all-day");
-        setEditAllDayDate(formatDateInput(sessionToEdit.schedule.date));
-        setEditStartAt("");
-        setEditEndAt("");
-        break;
-      case "timed":
-        setEditScheduleKind("timed");
-        setEditAllDayDate("");
-        setEditStartAt(formatDateTimeInput(sessionToEdit.schedule.startAt));
-        setEditEndAt(
-          sessionToEdit.schedule.endAt
-            ? formatDateTimeInput(sessionToEdit.schedule.endAt)
-            : "",
-        );
-        break;
-      default:
-        setEditScheduleKind("none");
-        setEditAllDayDate("");
-        setEditStartAt("");
-        setEditEndAt("");
-        break;
-    }
-  };
-
-  const cancelEditing = () => {
-    setEditingSessionId(null);
-    setEditTitle("");
-    setEditMaxPlayers("1");
-    setEditScheduleKind("none");
-    setEditAllDayDate("");
-    setEditStartAt("");
-    setEditEndAt("");
-  };
-
-  const handleEditSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
-    event.preventDefault();
-    if (!editingSessionId) {
-      return;
-    }
-    if (!canMutate) {
-      setFormError("Sign in to update sessions.");
-      return;
-    }
-
-    startTransition(async () => {
-      setFormError(null);
-      try {
-        const title = editTitle.trim();
-        const maxPlayers = Number(editMaxPlayers);
-        const schedule = buildSchedulePayload(
-          editScheduleKind,
-          editAllDayDate,
-          editStartAt,
-          editEndAt,
-        );
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        };
-        if (accessToken) {
-          headers.Authorization = `Bearer ${accessToken}`;
-        }
-
-        const response = await fetch(`/api/sessions/${editingSessionId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({ title, maxPlayers, schedule }),
-        });
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? "Failed to update session");
-        }
-
-        cancelEditing();
-        await refreshSessions();
-      } catch (error) {
-        setFormError(
-          error instanceof Error ? error.message : "Unable to update session",
-        );
-      }
-    });
-  };
-
-  const handleDelete = (sessionId: string) => {
-    if (!canMutate) {
-      setFormError("Sign in to delete sessions.");
-      return;
-    }
-
-    const confirmed =
-      typeof window !== "undefined"
-        ? window.confirm("Delete this session? This action cannot be undone.")
-        : true;
-
-    if (!confirmed) {
-      return;
-    }
-
-    startTransition(async () => {
-      setFormError(null);
-      try {
-        const headers: HeadersInit = {};
-        if (accessToken) {
-          headers.Authorization = `Bearer ${accessToken}`;
-        }
-
-        const response = await fetch(`/api/sessions/${sessionId}`, {
-          method: "DELETE",
-          headers,
-        });
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? "Failed to delete session");
-        }
-
-        if (editingSessionId === sessionId) {
-          cancelEditing();
-        }
-        await refreshSessions();
-      } catch (error) {
-        setFormError(
-          error instanceof Error ? error.message : "Unable to delete session",
-        );
-      }
-    });
   };
 
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
@@ -705,7 +521,6 @@ export function SessionsDashboard({
                 {sessions.map((session) => {
                   const participants = `${session.participants.length}/${session.maxPlayers}`;
                   const isFull = session.status === "active";
-                  const isEditing = editingSessionId === session.id;
                   return (
                     <li
                       key={session.id}
@@ -752,147 +567,11 @@ export function SessionsDashboard({
                               Details
                             </Link>
                           </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                              isEditing ? cancelEditing() : beginEditing(session)
-                            }
-                            disabled={!canMutate || isPending}
-                          >
-                            {isEditing ? "Cancel" : "Edit"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() => handleDelete(session.id)}
-                            disabled={!canMutate || isPending}
-                          >
-                            Delete
-                          </Button>
                         </div>
                       </div>
-                      {isEditing && (
-                        <form
-                          className="space-y-3 rounded-md border border-border bg-background px-4 py-3 text-sm shadow-sm"
-                          onSubmit={handleEditSubmit}
-                        >
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-title-${session.id}`}>
-                              Title
-                            </label>
-                            <input
-                              id={`edit-title-${session.id}`}
-                              value={editTitle}
-                              onChange={(event) => setEditTitle(event.target.value)}
-                              required
-                              minLength={3}
-                              className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-max-${session.id}`}>
-                              Maximum players
-                            </label>
-                            <input
-                              id={`edit-max-${session.id}`}
-                              type="number"
-                              min={1}
-                              value={editMaxPlayers}
-                              onChange={(event) => setEditMaxPlayers(event.target.value)}
-                              required
-                              className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                            />
-                          </div>
-                          <fieldset className="space-y-2">
-                            <legend className="text-xs font-medium text-muted-foreground">
-                              Schedule
-                            </legend>
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                type="button"
-                                variant={editScheduleKind === "none" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setEditScheduleKind("none")}
-                              >
-                                None
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={editScheduleKind === "all-day" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setEditScheduleKind("all-day")}
-                              >
-                                All day
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={editScheduleKind === "timed" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setEditScheduleKind("timed")}
-                              >
-                                Timed
-                              </Button>
-                            </div>
-                            {editScheduleKind === "all-day" && (
-                              <div className="flex flex-col gap-1.5">
-                                <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-all-day-${session.id}`}>
-                                  Date
-                                </label>
-                                <input
-                                  id={`edit-all-day-${session.id}`}
-                                  type="date"
-                                  value={editAllDayDate}
-                                  onChange={(event) => setEditAllDayDate(event.target.value)}
-                                  className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                                  required
-                                />
-                              </div>
-                            )}
-                            {editScheduleKind === "timed" && (
-                              <div className="flex flex-col gap-2 sm:flex-row">
-                                <div className="flex flex-col gap-1.5">
-                                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-start-${session.id}`}>
-                                    Start
-                                  </label>
-                                  <input
-                                    id={`edit-start-${session.id}`}
-                                    type="datetime-local"
-                                    value={editStartAt}
-                                    onChange={(event) => setEditStartAt(event.target.value)}
-                                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                                    required
-                                  />
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-end-${session.id}`}>
-                                    End (optional)
-                                  </label>
-                                  <input
-                                    id={`edit-end-${session.id}`}
-                                    type="datetime-local"
-                                    value={editEndAt}
-                                    onChange={(event) => setEditEndAt(event.target.value)}
-                                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </fieldset>
-                          <div className="flex gap-2">
-                            <Button type="submit" disabled={isPending}>
-                              Save changes
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={cancelEditing}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </form>
-                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Edit or delete this session from its detail page.
+                      </p>
                     </li>
                   );
                 })}

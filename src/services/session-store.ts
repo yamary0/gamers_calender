@@ -16,6 +16,12 @@ export type CreateSessionPayload = {
   maxPlayers: number;
 };
 
+export type UpdateSessionPayload = Partial<{
+  title: string;
+  maxPlayers: number;
+  status: SessionStatus;
+}>;
+
 type SessionRow = {
   id: string;
   title: string;
@@ -44,7 +50,7 @@ function mapRowToSession(row: SessionRow): Session {
   };
 }
 
-async function fetchSessionById(id: string) {
+async function fetchSessionById(id: string): Promise<SessionRow | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("sessions")
@@ -57,6 +63,20 @@ async function fetchSessionById(id: string) {
   }
 
   return data ?? null;
+}
+
+async function participantCount(sessionId: string): Promise<number> {
+  const supabase = admin();
+  const { count, error } = await supabase
+    .from("participants")
+    .select("user_id", { count: "exact", head: true })
+    .eq("session_id", sessionId);
+
+  if (error) {
+    throw new Error(`Failed to count participants: ${error.message}`);
+  }
+
+  return count ?? 0;
 }
 
 export async function listSessions(): Promise<Session[]> {
@@ -74,7 +94,7 @@ export async function listSessions(): Promise<Session[]> {
   return (data ?? []).map(mapRowToSession);
 }
 
-export type CreateSessionResult = {
+export type SessionMutationResult = {
   session: Session;
   activated: boolean;
 };
@@ -82,7 +102,7 @@ export type CreateSessionResult = {
 export async function createSession(
   payload: CreateSessionPayload,
   userId: string,
-): Promise<CreateSessionResult> {
+): Promise<SessionMutationResult> {
   const supabase = admin();
 
   const { data, error } = await supabase
@@ -99,7 +119,7 @@ export async function createSession(
     throw new Error(`Failed to create session: ${error?.message ?? "unknown error"}`);
   }
 
-  const insertParticipant = await supabase
+  const { error: ownerError } = await supabase
     .from("participants")
     .upsert(
       {
@@ -109,31 +129,106 @@ export async function createSession(
       { onConflict: "session_id,user_id" },
     );
 
-  if (insertParticipant.error) {
-    throw new Error(`Failed to add session owner: ${insertParticipant.error.message}`);
+  if (ownerError) {
+    throw new Error(`Failed to add session owner: ${ownerError.message}`);
   }
 
-  const { count } = await supabase
-    .from("participants")
-    .select("user_id", { count: "exact", head: true })
-    .eq("session_id", data.id);
-
-  const shouldActivate =
-    (count ?? 0) >= payload.maxPlayers && data.status !== "active";
+  const count = await participantCount(data.id);
+  const shouldActivate = count >= payload.maxPlayers && data.status !== "active";
 
   if (shouldActivate) {
     await supabase.from("sessions").update({ status: "active" }).eq("id", data.id);
   }
 
-  const withParticipants = await fetchSessionById(data.id);
+  const refreshed = await fetchSessionById(data.id);
 
-  if (!withParticipants) {
+  if (!refreshed) {
     throw new Error("Failed to reload session after creation.");
   }
 
   return {
-    session: mapRowToSession(withParticipants),
+    session: mapRowToSession(refreshed),
     activated: shouldActivate,
+  };
+}
+
+export async function updateSession(
+  id: string,
+  payload: UpdateSessionPayload,
+): Promise<SessionMutationResult> {
+  if (!payload.title && payload.maxPlayers === undefined && payload.status === undefined) {
+    throw new Error("Nothing to update.");
+  }
+
+  const supabase = admin();
+  const existing = await fetchSessionById(id);
+
+  if (!existing) {
+    throw new Error("Session not found");
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (payload.title !== undefined) {
+    updates.title = payload.title;
+  }
+  if (payload.maxPlayers !== undefined) {
+    updates.max_players = payload.maxPlayers;
+  }
+  if (payload.status !== undefined) {
+    updates.status = payload.status;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    const { error: updateError } = await supabase
+      .from("sessions")
+      .update(updates)
+      .eq("id", id);
+
+    if (updateError) {
+      throw new Error(`Failed to update session: ${updateError.message}`);
+    }
+  }
+
+  let refreshed = await fetchSessionById(id);
+
+  if (!refreshed) {
+    throw new Error("Failed to reload session after update.");
+  }
+
+  const maxPlayers = refreshed.max_players;
+  const count = await participantCount(id);
+
+  const shouldActivate =
+    count >= maxPlayers && refreshed.status !== "active";
+
+  if (shouldActivate) {
+    const { error: statusError } = await supabase
+      .from("sessions")
+      .update({ status: "active" })
+      .eq("id", id);
+
+    if (statusError) {
+      throw new Error(`Failed to activate session: ${statusError.message}`);
+    }
+
+    refreshed = await fetchSessionById(id);
+
+    if (!refreshed) {
+      throw new Error("Failed to reload session after activation.");
+    }
+  } else if (
+    payload.status === "open" &&
+    refreshed.status === "open" &&
+    count < maxPlayers &&
+    existing.status === "active"
+  ) {
+    // Deactivation requested explicitly and allowed because there is room.
+  }
+
+  return {
+    session: mapRowToSession(refreshed),
+    activated: existing.status !== "active" && refreshed.status === "active",
   };
 }
 
@@ -164,18 +259,11 @@ export async function joinSession(
     return { session: mapRowToSession(session), activated: false };
   }
 
-  const { count: currentCount } = await supabase
-    .from("participants")
-    .select("user_id", { count: "exact", head: true })
-    .eq("session_id", id);
+  const count = await participantCount(id);
 
-  if ((currentCount ?? 0) >= session.max_players || session.status === "active") {
+  if (count >= session.max_players || session.status === "active") {
     throw new Error("Session is full");
   }
-
-  const nextCount = (currentCount ?? 0) + 1;
-  const shouldActivate =
-    session.status !== "active" && nextCount >= session.max_players;
 
   const { error: insertError } = await supabase.from("participants").insert({
     session_id: id,
@@ -186,15 +274,38 @@ export async function joinSession(
     throw new Error(`Unable to join session: ${insertError.message}`);
   }
 
+  const nextCount = count + 1;
+  const shouldActivate = nextCount >= session.max_players && session.status !== "active";
+
   if (shouldActivate) {
     await supabase.from("sessions").update({ status: "active" }).eq("id", id);
   }
 
-  const updatedSession = await fetchSessionById(id);
+  const refreshed = await fetchSessionById(id);
 
-  if (!updatedSession) {
+  if (!refreshed) {
     throw new Error("Failed to reload session after join.");
   }
 
-  return { session: mapRowToSession(updatedSession), activated: shouldActivate };
+  return {
+    session: mapRowToSession(refreshed),
+    activated: shouldActivate,
+  };
+}
+
+export async function deleteSession(id: string): Promise<Session | null> {
+  const supabase = admin();
+  const existing = await fetchSessionById(id);
+
+  if (!existing) {
+    return null;
+  }
+
+  const { error } = await supabase.from("sessions").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(`Failed to delete session: ${error.message}`);
+  }
+
+  return mapRowToSession(existing);
 }

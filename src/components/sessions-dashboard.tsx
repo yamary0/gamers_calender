@@ -28,6 +28,9 @@ export function SessionsDashboard({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authFeedback, setAuthFeedback] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editMaxPlayers, setEditMaxPlayers] = useState<string>("1");
 
   const {
     user,
@@ -81,6 +84,111 @@ export function SessionsDashboard({
   const handleSignOut = async () => {
     await signOut();
     await refreshSession();
+  };
+
+  const beginEditing = (sessionToEdit: Session) => {
+    setFormError(null);
+    setEditingSessionId(sessionToEdit.id);
+    setEditTitle(sessionToEdit.title);
+    setEditMaxPlayers(String(sessionToEdit.maxPlayers));
+  };
+
+  const cancelEditing = () => {
+    setEditingSessionId(null);
+    setEditTitle("");
+    setEditMaxPlayers("1");
+  };
+
+  const handleEditSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
+    event.preventDefault();
+    if (!editingSessionId) {
+      return;
+    }
+    if (!canMutate) {
+      setFormError("Sign in to update sessions.");
+      return;
+    }
+
+    startTransition(async () => {
+      setFormError(null);
+      try {
+        const title = editTitle.trim();
+        const maxPlayers = Number(editMaxPlayers);
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`/api/sessions/${editingSessionId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ title, maxPlayers }),
+        });
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? "Failed to update session");
+        }
+
+        cancelEditing();
+        await refreshSessions();
+      } catch (error) {
+        setFormError(
+          error instanceof Error ? error.message : "Unable to update session",
+        );
+      }
+    });
+  };
+
+  const handleDelete = (sessionId: string) => {
+    if (!canMutate) {
+      setFormError("Sign in to delete sessions.");
+      return;
+    }
+
+    const confirmed =
+      typeof window !== "undefined"
+        ? window.confirm("Delete this session? This action cannot be undone.")
+        : true;
+
+    if (!confirmed) {
+      return;
+    }
+
+    startTransition(async () => {
+      setFormError(null);
+      try {
+        const headers: HeadersInit = {};
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`/api/sessions/${sessionId}`, {
+          method: "DELETE",
+          headers,
+        });
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? "Failed to delete session");
+        }
+
+        if (editingSessionId === sessionId) {
+          cancelEditing();
+        }
+        await refreshSessions();
+      } catch (error) {
+        setFormError(
+          error instanceof Error ? error.message : "Unable to delete session",
+        );
+      }
+    });
   };
 
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
@@ -368,39 +476,108 @@ export function SessionsDashboard({
             {sessions.map((session) => {
               const participants = `${session.participants.length}/${session.maxPlayers}`;
               const isFull = session.status === "active";
+              const isEditing = editingSessionId === session.id;
               return (
                 <li
                   key={session.id}
-                  className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3 md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3"
                 >
-                  <div>
-                    <p className="text-sm font-semibold">{session.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Status:{" "}
-                      <span className="font-medium text-foreground">
-                        {session.status}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Participants:{" "}
-                      <span className="font-medium text-foreground">
-                        {participants}
-                      </span>
-                    </p>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">{session.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Status:{" "}
+                        <span className="font-medium text-foreground">
+                          {session.status}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Participants:{" "}
+                        <span className="font-medium text-foreground">
+                          {participants}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handleJoin(session.id)}
+                        disabled={isPending || isFull || !canMutate}
+                      >
+                        {!canMutate
+                          ? "Sign in"
+                          : isFull
+                            ? "Ready"
+                            : isPending
+                              ? "Joining..."
+                              : "Join"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          isEditing ? cancelEditing() : beginEditing(session)
+                        }
+                        disabled={!canMutate || isPending}
+                      >
+                        {isEditing ? "Cancel" : "Edit"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() => handleDelete(session.id)}
+                        disabled={!canMutate || isPending}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => handleJoin(session.id)}
-                    disabled={isPending || isFull || !canMutate}
-                  >
-                    {!canMutate
-                      ? "Sign in"
-                      : isFull
-                        ? "Ready"
-                        : isPending
-                          ? "Joining..."
-                          : "Join"}
-                  </Button>
+                  {isEditing && (
+                    <form
+                      className="space-y-3 rounded-md border border-border bg-background px-4 py-3 text-sm shadow-sm"
+                      onSubmit={handleEditSubmit}
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-title-${session.id}`}>
+                          Title
+                        </label>
+                        <input
+                          id={`edit-title-${session.id}`}
+                          value={editTitle}
+                          onChange={(event) => setEditTitle(event.target.value)}
+                          required
+                          minLength={3}
+                          className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-max-${session.id}`}>
+                          Maximum players
+                        </label>
+                        <input
+                          id={`edit-max-${session.id}`}
+                          type="number"
+                          min={1}
+                          value={editMaxPlayers}
+                          onChange={(event) => setEditMaxPlayers(event.target.value)}
+                          required
+                          className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="submit" disabled={isPending}>
+                          Save changes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={cancelEditing}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  )}
                 </li>
               );
             })}

@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export default function AuthCallbackPage() {
+  const router = useRouter();
+
+  return (
+    <Suspense fallback={<CallbackFallback />}>
+      <CallbackHandler onComplete={() => router.replace("/")} />
+    </Suspense>
+  );
+}
+
+function CallbackHandler({ onComplete }: { onComplete: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -13,7 +23,7 @@ export default function AuthCallbackPage() {
     try {
       supabase = getSupabaseBrowserClient();
     } catch {
-      router.replace("/");
+      onComplete();
       return;
     }
 
@@ -35,8 +45,12 @@ export default function AuthCallbackPage() {
     };
 
     void handleExchange();
-  }, [router, searchParams]);
+  }, [router, searchParams, onComplete]);
 
+  return <CallbackFallback />;
+}
+
+function CallbackFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="rounded-lg border border-border bg-card px-6 py-8 text-center shadow-sm">

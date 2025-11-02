@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { format, parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
 import { SessionsCalendar } from "@/components/sessions-calendar";
+import { describeSessionSchedule } from "@/lib/session-formatters";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
@@ -45,6 +47,7 @@ export function SessionsDashboard({
   const [editAllDayDate, setEditAllDayDate] = useState("");
   const [editStartAt, setEditStartAt] = useState("");
   const [editEndAt, setEditEndAt] = useState("");
+  const [activeView, setActiveView] = useState<"feed" | "calendar">("feed");
 
   const {
     user,
@@ -133,25 +136,6 @@ export function SessionsDashboard({
     }
 
     return { kind: "timed", startAt: startISO, endAt: endISO };
-  };
-
-  const describeSchedule = (session: Session) => {
-    switch (session.schedule.kind) {
-      case "all-day":
-        return `All day · ${format(parseISO(session.schedule.date), "MMM d, yyyy")}`;
-      case "timed": {
-        const startLabel = format(
-          parseISO(session.schedule.startAt),
-          "MMM d, HH:mm",
-        );
-        const endLabel = session.schedule.endAt
-          ? format(parseISO(session.schedule.endAt), "HH:mm")
-          : null;
-        return `Scheduled · ${startLabel}${endLabel ? ` – ${endLabel}` : ""}`;
-      }
-      default:
-        return "No schedule set";
-    }
   };
 
   const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = async (
@@ -650,237 +634,273 @@ export function SessionsDashboard({
 
       {formError && <ErrorToast message={formError} />}
 
-      <SessionsCalendar sessions={calendarSessions} />
+      <div className="space-y-4">
+        <div
+          role="tablist"
+          aria-label="Session view"
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
+        >
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "feed"}
+            variant={activeView === "feed" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveView("feed")}
+          >
+            Feed
+          </Button>
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "calendar"}
+            variant={activeView === "calendar" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveView("calendar")}
+          >
+            Calendar
+          </Button>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active sessions</CardTitle>
-          <CardDescription>
-            Join a session to move it into the ready state.
-          </CardDescription>
-          <CardAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                startTransition(async () => {
-                  try {
-                    await refreshSessions();
-                  } catch (error) {
-                    setFormError(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to refresh sessions",
-                    );
+        {activeView === "calendar" ? (
+          <SessionsCalendar sessions={calendarSessions} />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Active sessions</CardTitle>
+              <CardDescription>
+                Join a session to move it into the ready state.
+              </CardDescription>
+              <CardAction>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    startTransition(async () => {
+                      try {
+                        await refreshSessions();
+                      } catch (error) {
+                        setFormError(
+                          error instanceof Error
+                            ? error.message
+                            : "Unable to refresh sessions",
+                        );
+                      }
+                    })
                   }
-                })
-              }
-              disabled={isPending}
-            >
-              Refresh
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-3">
-            {sessions.length === 0 && (
-              <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                No sessions yet. Create one above to get started.
-              </li>
-            )}
-            {sessions.map((session) => {
-              const participants = `${session.participants.length}/${session.maxPlayers}`;
-              const isFull = session.status === "active";
-              const isEditing = editingSessionId === session.id;
-              return (
-                <li
-                  key={session.id}
-                  className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3"
+                  disabled={isPending}
                 >
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{session.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Status:{" "}
-                        <span className="font-medium text-foreground">
-                          {session.status}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Participants:{" "}
-                        <span className="font-medium text-foreground">
-                          {participants}
-                        </span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Schedule:{" "}
-                        <span className="font-medium text-foreground">
-                          {describeSchedule(session)}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        onClick={() => handleJoin(session.id)}
-                        disabled={isPending || isFull || !canMutate}
-                      >
-                        {!canMutate
-                          ? "Sign in"
-                          : isFull
-                            ? "Ready"
-                            : isPending
-                              ? "Joining..."
-                              : "Join"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          isEditing ? cancelEditing() : beginEditing(session)
-                        }
-                        disabled={!canMutate || isPending}
-                      >
-                        {isEditing ? "Cancel" : "Edit"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() => handleDelete(session.id)}
-                        disabled={!canMutate || isPending}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                  {isEditing && (
-                    <form
-                      className="space-y-3 rounded-md border border-border bg-background px-4 py-3 text-sm shadow-sm"
-                      onSubmit={handleEditSubmit}
+                  Refresh
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3">
+                {sessions.length === 0 && (
+                  <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                    No sessions yet. Create one above to get started.
+                  </li>
+                )}
+                {sessions.map((session) => {
+                  const participants = `${session.participants.length}/${session.maxPlayers}`;
+                  const isFull = session.status === "active";
+                  const isEditing = editingSessionId === session.id;
+                  return (
+                    <li
+                      key={session.id}
+                      className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3"
                     >
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-title-${session.id}`}>
-                          Title
-                        </label>
-                        <input
-                          id={`edit-title-${session.id}`}
-                          value={editTitle}
-                          onChange={(event) => setEditTitle(event.target.value)}
-                          required
-                          minLength={3}
-                          className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-max-${session.id}`}>
-                          Maximum players
-                        </label>
-                        <input
-                          id={`edit-max-${session.id}`}
-                          type="number"
-                          min={1}
-                          value={editMaxPlayers}
-                          onChange={(event) => setEditMaxPlayers(event.target.value)}
-                          required
-                          className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        />
-                      </div>
-                      <fieldset className="space-y-2">
-                        <legend className="text-xs font-medium text-muted-foreground">
-                          Schedule
-                        </legend>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">{session.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Status:{" "}
+                            <span className="font-medium text-foreground">
+                              {session.status}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Participants:{" "}
+                            <span className="font-medium text-foreground">
+                              {participants}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Schedule:{" "}
+                            <span className="font-medium text-foreground">
+                              {describeSessionSchedule(session)}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
-                            variant={editScheduleKind === "none" ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setEditScheduleKind("none")}
+                            onClick={() => handleJoin(session.id)}
+                            disabled={isPending || isFull || !canMutate}
                           >
-                            None
+                            {!canMutate
+                              ? "Sign in"
+                              : isFull
+                                ? "Ready"
+                                : isPending
+                                  ? "Joining..."
+                                  : "Join"}
+                          </Button>
+                          <Button asChild variant="secondary">
+                            <Link href={`/sessions/${session.id}`}>
+                              Details
+                            </Link>
                           </Button>
                           <Button
                             type="button"
-                            variant={editScheduleKind === "all-day" ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setEditScheduleKind("all-day")}
+                            variant="outline"
+                            onClick={() =>
+                              isEditing ? cancelEditing() : beginEditing(session)
+                            }
+                            disabled={!canMutate || isPending}
                           >
-                            All day
+                            {isEditing ? "Cancel" : "Edit"}
                           </Button>
                           <Button
                             type="button"
-                            variant={editScheduleKind === "timed" ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setEditScheduleKind("timed")}
+                            variant="destructive"
+                            onClick={() => handleDelete(session.id)}
+                            disabled={!canMutate || isPending}
                           >
-                            Timed
+                            Delete
                           </Button>
                         </div>
-                        {editScheduleKind === "all-day" && (
+                      </div>
+                      {isEditing && (
+                        <form
+                          className="space-y-3 rounded-md border border-border bg-background px-4 py-3 text-sm shadow-sm"
+                          onSubmit={handleEditSubmit}
+                        >
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-all-day-${session.id}`}>
-                              Date
+                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-title-${session.id}`}>
+                              Title
                             </label>
                             <input
-                              id={`edit-all-day-${session.id}`}
-                              type="date"
-                              value={editAllDayDate}
-                              onChange={(event) => setEditAllDayDate(event.target.value)}
-                              className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                              id={`edit-title-${session.id}`}
+                              value={editTitle}
+                              onChange={(event) => setEditTitle(event.target.value)}
                               required
+                              minLength={3}
+                              className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                             />
                           </div>
-                        )}
-                        {editScheduleKind === "timed" && (
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <div className="flex flex-col gap-1.5">
-                              <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-start-${session.id}`}>
-                                Start
-                              </label>
-                              <input
-                                id={`edit-start-${session.id}`}
-                                type="datetime-local"
-                                value={editStartAt}
-                                onChange={(event) => setEditStartAt(event.target.value)}
-                                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                                required
-                              />
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-end-${session.id}`}>
-                                End (optional)
-                              </label>
-                              <input
-                                id={`edit-end-${session.id}`}
-                                type="datetime-local"
-                                value={editEndAt}
-                                onChange={(event) => setEditEndAt(event.target.value)}
-                                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                              />
-                            </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-max-${session.id}`}>
+                              Maximum players
+                            </label>
+                            <input
+                              id={`edit-max-${session.id}`}
+                              type="number"
+                              min={1}
+                              value={editMaxPlayers}
+                              onChange={(event) => setEditMaxPlayers(event.target.value)}
+                              required
+                              className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            />
                           </div>
-                        )}
-                      </fieldset>
-                      <div className="flex gap-2">
-                        <Button type="submit" disabled={isPending}>
-                          Save changes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={cancelEditing}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </form>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </CardContent>
-      </Card>
+                          <fieldset className="space-y-2">
+                            <legend className="text-xs font-medium text-muted-foreground">
+                              Schedule
+                            </legend>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant={editScheduleKind === "none" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setEditScheduleKind("none")}
+                              >
+                                None
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={editScheduleKind === "all-day" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setEditScheduleKind("all-day")}
+                              >
+                                All day
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={editScheduleKind === "timed" ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setEditScheduleKind("timed")}
+                              >
+                                Timed
+                              </Button>
+                            </div>
+                            {editScheduleKind === "all-day" && (
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-all-day-${session.id}`}>
+                                  Date
+                                </label>
+                                <input
+                                  id={`edit-all-day-${session.id}`}
+                                  type="date"
+                                  value={editAllDayDate}
+                                  onChange={(event) => setEditAllDayDate(event.target.value)}
+                                  className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                  required
+                                />
+                              </div>
+                            )}
+                            {editScheduleKind === "timed" && (
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-start-${session.id}`}>
+                                    Start
+                                  </label>
+                                  <input
+                                    id={`edit-start-${session.id}`}
+                                    type="datetime-local"
+                                    value={editStartAt}
+                                    onChange={(event) => setEditStartAt(event.target.value)}
+                                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                    required
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-end-${session.id}`}>
+                                    End (optional)
+                                  </label>
+                                  <input
+                                    id={`edit-end-${session.id}`}
+                                    type="datetime-local"
+                                    value={editEndAt}
+                                    onChange={(event) => setEditEndAt(event.target.value)}
+                                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </fieldset>
+                          <div className="flex gap-2">
+                            <Button type="submit" disabled={isPending}>
+                              Save changes
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={cancelEditing}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </section>
   );
 }

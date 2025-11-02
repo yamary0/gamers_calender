@@ -145,6 +145,11 @@ export async function listSessions(): Promise<Session[]> {
   return (data ?? []).map(mapRowToSession);
 }
 
+export async function getSession(id: string): Promise<Session | null> {
+  const row = await fetchSessionById(id);
+  return row ? mapRowToSession(row) : null;
+}
+
 export async function createSession(
   payload: CreateSessionPayload,
   userId: string,

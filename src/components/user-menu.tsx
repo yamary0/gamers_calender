@@ -66,8 +66,18 @@ export function UserMenu() {
 
   const avatarUrl = getAvatarUrl(user);
   const displayInitial = getDisplayInitial(
-    typeof user?.email === "string" ? user.email : user?.id ?? null,
+    typeof user?.user_metadata?.name === "string"
+      ? (user.user_metadata.name as string)
+      : user?.id ?? null,
   );
+
+  const displayName = user
+    ? typeof user.user_metadata?.name === "string"
+      ? (user.user_metadata.name as string)
+      : typeof user.email === "string"
+        ? user.email.split("@")[0]
+        : user.id
+    : "Sign in";
 
   const handleAuthSubmit: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
@@ -106,24 +116,26 @@ export function UserMenu() {
       <Button
         type="button"
         variant="ghost"
-        size="icon-sm"
         aria-label={user ? "Open user menu" : "Open authentication menu"}
         onClick={() => setOpen((current) => !current)}
-        className="relative rounded-full border border-border bg-muted/60 p-0"
+        className="relative flex items-center gap-2 rounded-full border border-border bg-muted/60 pl-1.5 pr-3.5 py-5"
       >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt="User avatar"
-            className="size-full rounded-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span className="text-sm font-semibold text-muted-foreground">
-            {displayInitial}
-          </span>
-        )}
+        <span className="flex size-8 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-xs font-semibold text-muted-foreground">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt="User avatar"
+              className="size-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            displayInitial
+          )}
+        </span>
+        <span className="text-xs font-medium text-foreground">
+          {displayName}
+        </span>
       </Button>
 
       {open && (

@@ -1,8 +1,6 @@
 import { headers } from "next/headers";
 import { SessionsDashboard } from "@/components/sessions-dashboard";
 
-const APP_NAME = "Gamers Calendar";
-
 type PingPayload =
   | { pong: true; timestamp?: string }
   | { pong: false; error: string };
@@ -51,7 +49,9 @@ export default async function Home() {
   return (
     <div className="w-full space-y-8">
       <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">{APP_NAME}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Gamers Calendar
+        </h1>
         <p className="text-sm text-muted-foreground">
           Gamers meetup scheduler prototype
         </p>

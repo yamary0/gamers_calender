@@ -37,7 +37,7 @@ export function SessionsDashboard({
   const [createAllDayDate, setCreateAllDayDate] = useState("");
   const [createStartAt, setCreateStartAt] = useState("");
   const [createEndAt, setCreateEndAt] = useState("");
-  const [activeView, setActiveView] = useState<"feed" | "calendar">("feed");
+  const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const { session } = useAuth();

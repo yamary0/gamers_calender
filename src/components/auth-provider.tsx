@@ -13,6 +13,7 @@ type AuthContextValue = {
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  signInWithDiscord: (redirectTo?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -92,6 +93,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       session,
       loading,
       authError,
+      signInWithDiscord: async (redirectTo?: string) => {
+        if (!supabase) {
+          setAuthError("Supabase client unavailable.");
+          return;
+        }
+
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "discord",
+          options: {
+            redirectTo:
+              redirectTo ??
+              (typeof window !== "undefined"
+                ? `${window.location.origin}/auth/callback`
+                : undefined),
+          },
+        });
+
+        if (error) {
+          setAuthError(error.message);
+        }
+      },
       signInWithEmail: async (email: string, password: string) => {
         if (!supabase) {
           setAuthError("Supabase client unavailable.");
@@ -161,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             authError ?? "Supabase client unavailable. Check environment.",
           signInWithEmail: noop,
           signUpWithEmail: noop,
+          signInWithDiscord: noop,
           signOut: noop,
           refreshSession: noop,
         }}

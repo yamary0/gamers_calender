@@ -36,6 +36,7 @@ export function SessionsDashboard({
     authError,
     signInWithEmail,
     signUpWithEmail,
+    signInWithDiscord,
     signOut,
     refreshSession,
   } = useAuth();
@@ -197,62 +198,82 @@ export function SessionsDashboard({
               </div>
             </div>
           ) : (
-            <form className="space-y-4" onSubmit={handleAuthSubmit}>
-              <div className="flex gap-2">
+            <div className="space-y-4">
+              <form className="space-y-4" onSubmit={handleAuthSubmit}>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={authMode === "signIn" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAuthMode("signIn")}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={authMode === "signUp" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAuthMode("signUp")}
+                  >
+                    Sign up
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-email">
+                    Email
+                  </label>
+                  <input
+                    id="auth-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-password">
+                    Password
+                  </label>
+                  <input
+                    id="auth-password"
+                    type="password"
+                    required
+                    value={password}
+                    minLength={6}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+                <Button type="submit">
+                  {authMode === "signIn" ? "Sign in" : "Create account"}
+                </Button>
+                {authError && <ErrorToast message={authError} />}
+                {authFeedback && (
+                  <p className="text-xs text-muted-foreground">{authFeedback}</p>
+                )}
+              </form>
+              <div className="flex flex-col items-start gap-2 border-t border-dashed border-border pt-4">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Or continue with
+                </p>
                 <Button
                   type="button"
-                  variant={authMode === "signIn" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setAuthMode("signIn")}
+                  variant="outline"
+                  onClick={() =>
+                    signInWithDiscord(
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/auth/callback`
+                        : undefined,
+                    )
+                  }
                 >
-                  Sign in
-                </Button>
-                <Button
-                  type="button"
-                  variant={authMode === "signUp" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setAuthMode("signUp")}
-                >
-                  Sign up
+                  Sign in with Discord
                 </Button>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-email">
-                  Email
-                </label>
-                <input
-                  id="auth-email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  placeholder="you@example.com"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-muted-foreground" htmlFor="auth-password">
-                  Password
-                </label>
-                <input
-                  id="auth-password"
-                  type="password"
-                  required
-                  value={password}
-                  minLength={6}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  placeholder="At least 6 characters"
-                />
-              </div>
-              <Button type="submit">
-                {authMode === "signIn" ? "Sign in" : "Create account"}
-              </Button>
-              {authError && <ErrorToast message={authError} />}
-              {authFeedback && (
-                <p className="text-xs text-muted-foreground">{authFeedback}</p>
-              )}
-            </form>
+            </div>
           )}
         </CardContent>
       </Card>

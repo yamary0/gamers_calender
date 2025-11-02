@@ -42,6 +42,7 @@ export function SessionsDashboard({
   const [createStartAt, setCreateStartAt] = useState("");
   const [createEndAt, setCreateEndAt] = useState("");
   const [activeView, setActiveView] = useState<"feed" | "calendar">("feed");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const {
     user,
@@ -72,6 +73,19 @@ export function SessionsDashboard({
     const data = (await response.json()) as { data: Session[] };
     setSessions(data.data);
   }
+
+  const openCreateForm = () => {
+    setFormError(null);
+    setCreateScheduleKind("none");
+    setCreateAllDayDate("");
+    setCreateStartAt("");
+    setCreateEndAt("");
+    setIsCreateOpen(true);
+  };
+
+  const closeCreateForm = () => {
+    setIsCreateOpen(false);
+  };
 
   const getScheduleStartInstant = (session: Session) => {
     switch (session.schedule.kind) {
@@ -162,6 +176,7 @@ export function SessionsDashboard({
         setCreateAllDayDate("");
         setCreateStartAt("");
         setCreateEndAt("");
+        closeCreateForm();
         await refreshSessions();
       } catch (error) {
         setFormError(
@@ -205,8 +220,11 @@ export function SessionsDashboard({
     });
   }
 
+
   return (
     <section className="space-y-6">
+      {formError && <ErrorToast message={formError} />}
+
       <Card>
         <CardHeader>
           <CardTitle>Authentication</CardTitle>
@@ -322,164 +340,190 @@ export function SessionsDashboard({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create session</CardTitle>
-          <CardDescription>
-            Provide a title and headcount to open a new slot.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleCreate}>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-muted-foreground" htmlFor="title">
-                Title
-              </label>
-              <input
-                id="title"
-                name="title"
-                required
-                minLength={3}
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                placeholder="Friday Night Raid"
-                disabled={!canMutate || isPending}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                className="text-sm font-medium text-muted-foreground"
-                htmlFor="maxPlayers"
+      <div
+        role="tablist"
+        aria-label="Session view"
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
+      >
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "feed"}
+          variant={activeView === "feed" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setActiveView("feed")}
+        >
+          Feed
+        </Button>
+        <Button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "calendar"}
+          variant={activeView === "calendar" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setActiveView("calendar")}
+        >
+          Calendar
+        </Button>
+      </div>
+
+      {isCreateOpen && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create new session</CardTitle>
+            <CardDescription>
+              Configure the basics and optionally set a schedule.
+            </CardDescription>
+            <CardAction>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={closeCreateForm}
               >
-                Maximum players
-              </label>
-              <input
-                id="maxPlayers"
-                name="maxPlayers"
-                required
-                min={1}
-                type="number"
-                className="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                placeholder="5"
-                disabled={!canMutate || isPending}
-              />
-            </div>
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium text-muted-foreground">
-                Schedule
-              </legend>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={createScheduleKind === "none" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCreateScheduleKind("none")}
-                >
-                  None
-                </Button>
-                <Button
-                  type="button"
-                  variant={createScheduleKind === "all-day" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCreateScheduleKind("all-day")}
-                >
-                  All day
-                </Button>
-                <Button
-                  type="button"
-                  variant={createScheduleKind === "timed" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCreateScheduleKind("timed")}
-                >
-                  Timed
-                </Button>
+                Close
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleCreate}>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="create-title">
+                  Title
+                </label>
+                <input
+                  id="create-title"
+                  name="title"
+                  type="text"
+                  minLength={3}
+                  maxLength={120}
+                  required
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  placeholder="Game night in Shibuya"
+                  disabled={!canMutate || isPending}
+                />
               </div>
-              {createScheduleKind === "all-day" && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="create-all-day-date">
-                    Date
-                  </label>
-                  <input
-                    id="create-all-day-date"
-                    type="date"
-                    value={createAllDayDate}
-                    onChange={(event) => setCreateAllDayDate(event.target.value)}
-                    className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="create-max-players">
+                  Maximum players
+                </label>
+                <input
+                  id="create-max-players"
+                  name="maxPlayers"
+                  type="number"
+                  min={1}
+                  required
+                  defaultValue={4}
+                  className="max-w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  disabled={!canMutate || isPending}
+                />
+              </div>
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-muted-foreground">
+                  Schedule (optional)
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={createScheduleKind === "none" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateScheduleKind("none")}
                     disabled={!canMutate || isPending}
-                    required
-                  />
+                  >
+                    None
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={createScheduleKind === "all-day" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateScheduleKind("all-day")}
+                    disabled={!canMutate || isPending}
+                  >
+                    All day
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={createScheduleKind === "timed" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCreateScheduleKind("timed")}
+                    disabled={!canMutate || isPending}
+                  >
+                    Timed
+                  </Button>
                 </div>
-              )}
-              {createScheduleKind === "timed" && (
-                <div className="flex flex-col gap-2 sm:flex-row">
+
+                {createScheduleKind === "all-day" && (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-start-at">
-                      Start
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-all-day-date">
+                      Date
                     </label>
                     <input
-                      id="create-start-at"
-                      type="datetime-local"
-                      value={createStartAt}
-                      onChange={(event) => setCreateStartAt(event.target.value)}
-                      className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      id="create-all-day-date"
+                      type="date"
+                      value={createAllDayDate}
+                      onChange={(event) => setCreateAllDayDate(event.target.value)}
+                      className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       disabled={!canMutate || isPending}
                       required
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-end-at">
-                      End (optional)
-                    </label>
-                    <input
-                      id="create-end-at"
-                      type="datetime-local"
-                      value={createEndAt}
-                      onChange={(event) => setCreateEndAt(event.target.value)}
-                      className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      disabled={!canMutate || isPending}
-                    />
+                )}
+                {createScheduleKind === "timed" && (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="create-start-at">
+                        Start
+                      </label>
+                      <input
+                        id="create-start-at"
+                        type="datetime-local"
+                        value={createStartAt}
+                        onChange={(event) => setCreateStartAt(event.target.value)}
+                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        disabled={!canMutate || isPending}
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="create-end-at">
+                        End (optional)
+                      </label>
+                      <input
+                        id="create-end-at"
+                        type="datetime-local"
+                        value={createEndAt}
+                        onChange={(event) => setCreateEndAt(event.target.value)}
+                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        disabled={!canMutate || isPending}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-            </fieldset>
-            <Button type="submit" disabled={isPending || !canMutate}>
-              {!canMutate ? "Sign in to create" : isPending ? "Saving..." : "Create"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {formError && <ErrorToast message={formError} />}
+                )}
+              </fieldset>
+              <div className="flex items-center gap-2">
+                <Button type="submit" disabled={isPending || !canMutate}>
+                  {!canMutate ? "Sign in to create" : isPending ? "Saving..." : "Create"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={closeCreateForm}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-4">
-        <div
-          role="tablist"
-          aria-label="Session view"
-          className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
-        >
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeView === "feed"}
-            variant={activeView === "feed" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveView("feed")}
-          >
-            Feed
-          </Button>
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeView === "calendar"}
-            variant={activeView === "calendar" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveView("calendar")}
-          >
-            Calendar
-          </Button>
-        </div>
-
         {activeView === "calendar" ? (
-          <SessionsCalendar sessions={calendarSessions} />
+          <SessionsCalendar
+            sessions={calendarSessions}
+            onCreateSession={openCreateForm}
+          />
         ) : (
           <Card>
             <CardHeader>
@@ -487,7 +531,15 @@ export function SessionsDashboard({
               <CardDescription>
                 Join a session to move it into the ready state.
               </CardDescription>
-              <CardAction>
+              <CardAction className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openCreateForm}
+                >
+                  + Session
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -515,7 +567,7 @@ export function SessionsDashboard({
               <ul className="space-y-3">
                 {sessions.length === 0 && (
                   <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                    No sessions yet. Create one above to get started.
+                    No sessions yet. Use + Session to add one.
                   </li>
                 )}
                 {sessions.map((session) => {

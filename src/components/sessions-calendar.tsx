@@ -24,6 +24,7 @@ import type { Session } from "@/services/session-store";
 
 type Props = {
   sessions: Session[];
+  onCreateSession?: () => void;
 };
 
 type CalendarDay = {
@@ -80,7 +81,7 @@ function buildCalendarMatrix(activeDate: Date, sessions: Session[]): CalendarDay
 
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function SessionsCalendar({ sessions }: Props) {
+export function SessionsCalendar({ sessions, onCreateSession }: Props) {
   const [activeDate, setActiveDate] = useState(() => new Date());
 
   const calendar = useMemo(
@@ -95,6 +96,16 @@ export function SessionsCalendar({ sessions }: Props) {
           Calendar Overview
         </CardTitle>
         <div className="flex items-center gap-2">
+          {onCreateSession && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCreateSession}
+            >
+              + Session
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"

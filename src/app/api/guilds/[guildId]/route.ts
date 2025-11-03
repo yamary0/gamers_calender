@@ -8,6 +8,7 @@ import {
   listGuildMembers,
   updateGuild,
 } from "@/services/guild-store";
+import type { GuildNotificationSettings } from "@/services/guild-store";
 
 type RouteContext = {
   params: Promise<{ guildId: string }>;
@@ -62,6 +63,7 @@ type UpdateGuildBody = {
   name?: unknown;
   slug?: unknown;
   discordWebhookUrl?: unknown;
+  notificationSettings?: unknown;
 };
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
@@ -91,7 +93,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const updates: { name?: string; slug?: string; webhookUrl?: string | null } = {};
+  const updates: {
+    name?: string;
+    slug?: string;
+    webhookUrl?: string | null;
+    notificationSettings?: {
+      onSessionCreate: boolean;
+      onSessionJoin: boolean;
+      onSessionActivate: boolean;
+      onSessionStart: boolean;
+    };
+  } = {};
 
   if (body.name !== undefined) {
     if (typeof body.name !== "string") {
@@ -124,6 +136,38 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       body.discordWebhookUrl === null
         ? null
         : (body.discordWebhookUrl as string).trim();
+  }
+
+  if (body.notificationSettings !== undefined) {
+    if (!body.notificationSettings || typeof body.notificationSettings !== "object") {
+      return NextResponse.json(
+        { error: "notificationSettings must be an object." },
+        { status: 422 },
+      );
+    }
+    const settings = body.notificationSettings as Record<string, unknown>;
+    const keys: Array<keyof GuildNotificationSettings> = [
+      "onSessionCreate",
+      "onSessionJoin",
+      "onSessionActivate",
+      "onSessionStart",
+    ];
+
+    for (const key of keys) {
+      if (typeof settings[key] !== "boolean") {
+        return NextResponse.json(
+          { error: `notificationSettings.${key} must be boolean.` },
+          { status: 422 },
+        );
+      }
+    }
+
+    updates.notificationSettings = {
+      onSessionCreate: settings.onSessionCreate as boolean,
+      onSessionJoin: settings.onSessionJoin as boolean,
+      onSessionActivate: settings.onSessionActivate as boolean,
+      onSessionStart: settings.onSessionStart as boolean,
+    };
   }
 
   if (Object.keys(updates).length === 0) {

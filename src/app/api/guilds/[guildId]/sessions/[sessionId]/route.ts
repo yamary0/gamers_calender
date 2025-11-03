@@ -10,6 +10,10 @@ import {
 import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import {
+  scheduleSessionStartNotification,
+  cancelSessionStartNotification,
+} from "@/lib/session-notifier";
 
 type RouteContext = {
   params: Promise<{ guildId: string; sessionId: string }>;
@@ -188,14 +192,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const result = await updateSession(sessionId, updates, guildId);
-    if (result.activated) {
+
+    if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
+          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
         },
         guild.webhookUrl,
       );
     }
+
+    scheduleSessionStartNotification({
+      guildId,
+      session: result.session,
+      webhookUrl: guild.webhookUrl,
+      settings: guild.notificationSettings,
+    });
+
     return NextResponse.json({ data: result.session });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to update session";
@@ -229,6 +242,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    cancelSessionStartNotification({ guildId, sessionId });
+
     const removed = await deleteSession(sessionId, guildId);
 
     if (!removed) {

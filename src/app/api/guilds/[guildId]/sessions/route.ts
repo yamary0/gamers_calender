@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import { scheduleSessionStartNotification } from "@/lib/session-notifier";
 import { getGuildById } from "@/services/guild-store";
 import {
   createSession,
@@ -161,6 +162,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Guild not found." }, { status: 404 });
     }
 
+    const creatorName =
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      user.email ??
+      user.id;
+
     const result = await createSession(
       {
         title,
@@ -170,14 +177,32 @@ export async function POST(request: NextRequest, context: RouteContext) {
       user.id,
       guildId,
     );
-    if (result.activated) {
+
+    if (guild.notificationSettings.onSessionCreate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
+          content: `🆕 **New session:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}) created by ${creatorName}.`,
         },
         guild.webhookUrl,
       );
     }
+
+    if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
+      await sendDiscordNotification(
+        {
+          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+        },
+        guild.webhookUrl,
+      );
+    }
+
+    scheduleSessionStartNotification({
+      guildId,
+      session: result.session,
+      webhookUrl: guild.webhookUrl,
+      settings: guild.notificationSettings,
+    });
+
     return NextResponse.json({ data: result.session }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

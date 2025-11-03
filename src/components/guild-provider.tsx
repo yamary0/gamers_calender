@@ -11,12 +11,15 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import type { GuildNotificationSettings } from "@/services/guild-store";
 
 export type GuildSummary = {
   id: string;
   name: string;
   slug: string;
   role: "owner" | "member";
+  webhookUrl: string | null;
+  notificationSettings: GuildNotificationSettings;
 };
 
 type GuildContextValue = {

@@ -4,6 +4,7 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import { joinSession, getSession } from "@/services/session-store";
 import { sendDiscordNotification } from "@/lib/discord";
+import { scheduleSessionStartNotification } from "@/lib/session-notifier";
 
 type RouteContext = {
   params: Promise<{ guildId: string; sessionId: string }>;
@@ -40,14 +41,37 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const result = await joinSession(sessionId, user.id, guildId);
-    if (result.activated) {
+    const participantName =
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      user.email ??
+      user.id;
+
+    if (guild.notificationSettings.onSessionJoin && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
+          content: `👥 **${participantName} joined:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}).`,
         },
         guild.webhookUrl,
       );
     }
+
+    if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
+      await sendDiscordNotification(
+        {
+          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+        },
+        guild.webhookUrl,
+      );
+    }
+
+    scheduleSessionStartNotification({
+      guildId,
+      session: result.session,
+      webhookUrl: guild.webhookUrl,
+      settings: guild.notificationSettings,
+    });
+
     return NextResponse.json({ data: result.session });
   } catch (error) {
     if (error instanceof Error) {

@@ -10,6 +10,7 @@ export type Guild = {
   ownerId: string;
   createdAt: string;
   webhookUrl: string | null;
+  notificationSettings: GuildNotificationSettings;
 };
 
 export type GuildMembership = {
@@ -19,12 +20,54 @@ export type GuildMembership = {
   joinedAt: string;
 };
 
+export type GuildNotificationSettings = {
+  onSessionCreate: boolean;
+  onSessionJoin: boolean;
+  onSessionActivate: boolean;
+  onSessionStart: boolean;
+};
+
 export type GuildMemberDetail = GuildMembership & {
   displayName: string | null;
   provider: string | null;
 };
 
 export type GuildWithRole = Guild & { role: GuildRole };
+
+const DEFAULT_NOTIFICATION_SETTINGS: GuildNotificationSettings = {
+  onSessionCreate: true,
+  onSessionJoin: true,
+  onSessionActivate: true,
+  onSessionStart: false,
+};
+
+const normalizeNotificationSettings = (
+  value: unknown,
+): GuildNotificationSettings => {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_NOTIFICATION_SETTINGS };
+  }
+
+  const partial = value as Partial<GuildNotificationSettings>;
+  return {
+    onSessionCreate:
+      typeof partial.onSessionCreate === "boolean"
+        ? partial.onSessionCreate
+        : DEFAULT_NOTIFICATION_SETTINGS.onSessionCreate,
+    onSessionJoin:
+      typeof partial.onSessionJoin === "boolean"
+        ? partial.onSessionJoin
+        : DEFAULT_NOTIFICATION_SETTINGS.onSessionJoin,
+    onSessionActivate:
+      typeof partial.onSessionActivate === "boolean"
+        ? partial.onSessionActivate
+        : DEFAULT_NOTIFICATION_SETTINGS.onSessionActivate,
+    onSessionStart:
+      typeof partial.onSessionStart === "boolean"
+        ? partial.onSessionStart
+        : DEFAULT_NOTIFICATION_SETTINGS.onSessionStart,
+  };
+};
 
 const admin = () => getSupabaseServiceClient();
 
@@ -80,7 +123,9 @@ export async function listGuildsForUser(
   const supabase = admin();
   const { data, error } = await supabase
     .from("guild_members")
-    .select("role,joined_at,guilds(id,name,slug,owner_id,created_at,discord_webhook_url)")
+    .select(
+      "role,joined_at,guilds(id,name,slug,owner_id,created_at,discord_webhook_url,discord_notification_settings)",
+    )
     .eq("user_id", userId)
     .order("joined_at", { ascending: true });
 
@@ -98,8 +143,13 @@ export async function listGuildsForUser(
             owner_id?: string;
             created_at?: string;
             discord_webhook_url?: string | null;
+            discord_notification_settings?: unknown;
           }
         | null;
+      const notificationSettings = normalizeNotificationSettings(
+        guild?.discord_notification_settings ?? null,
+      );
+
       return {
         id: guild?.id ?? "",
         name: guild?.name ?? "",
@@ -107,6 +157,7 @@ export async function listGuildsForUser(
         ownerId: guild?.owner_id ?? "",
         createdAt: guild?.created_at ?? "",
         webhookUrl: guild?.discord_webhook_url ?? null,
+        notificationSettings,
         role: (row.role ?? "member") as GuildRole,
       };
     }) ?? []
@@ -117,7 +168,9 @@ export async function getGuildBySlug(slug: string): Promise<Guild | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("guilds")
-    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
+    .select(
+      "id,name,slug,owner_id,created_at,discord_webhook_url,discord_notification_settings",
+    )
     .eq("slug", slug)
     .maybeSingle();
 
@@ -136,6 +189,9 @@ export async function getGuildBySlug(slug: string): Promise<Guild | null> {
     ownerId: data.owner_id,
     createdAt: data.created_at,
     webhookUrl: data.discord_webhook_url ?? null,
+    notificationSettings: normalizeNotificationSettings(
+      data.discord_notification_settings ?? null,
+    ),
   };
 }
 
@@ -143,7 +199,9 @@ export async function getGuildById(id: string): Promise<Guild | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("guilds")
-    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
+    .select(
+      "id,name,slug,owner_id,created_at,discord_webhook_url,discord_notification_settings",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -162,6 +220,9 @@ export async function getGuildById(id: string): Promise<Guild | null> {
     ownerId: data.owner_id,
     createdAt: data.created_at,
     webhookUrl: data.discord_webhook_url ?? null,
+    notificationSettings: normalizeNotificationSettings(
+      data.discord_notification_settings ?? null,
+    ),
   };
 }
 
@@ -178,8 +239,11 @@ export async function createGuild(
       name,
       slug,
       owner_id: ownerId,
+      discord_notification_settings: DEFAULT_NOTIFICATION_SETTINGS,
     })
-    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
+    .select(
+      "id,name,slug,owner_id,created_at,discord_webhook_url,discord_notification_settings",
+    )
     .single();
 
   if (error || !data) {
@@ -205,6 +269,9 @@ export async function createGuild(
     ownerId: data.owner_id,
     createdAt: data.created_at,
     webhookUrl: data.discord_webhook_url ?? null,
+    notificationSettings: normalizeNotificationSettings(
+      data.discord_notification_settings ?? null,
+    ),
     role: "owner",
   };
 }
@@ -326,6 +393,7 @@ type UpdateGuildInput = {
   name?: string;
   slug?: string;
   webhookUrl?: string | null;
+  notificationSettings?: GuildNotificationSettings;
 };
 
 export async function updateGuild(
@@ -387,6 +455,12 @@ export async function updateGuild(
     updates.discord_webhook_url = normalized && normalized.length > 0 ? normalized : null;
   }
 
+  if (input.notificationSettings !== undefined) {
+    updates.discord_notification_settings = normalizeNotificationSettings(
+      input.notificationSettings,
+    );
+  }
+
   if (Object.keys(updates).length === 0) {
     return existing;
   }
@@ -395,7 +469,9 @@ export async function updateGuild(
     .from("guilds")
     .update(updates)
     .eq("id", id)
-    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
+    .select(
+      "id,name,slug,owner_id,created_at,discord_webhook_url,discord_notification_settings",
+    )
     .single();
 
   if (error || !data) {
@@ -409,6 +485,9 @@ export async function updateGuild(
     ownerId: data.owner_id,
     createdAt: data.created_at,
     webhookUrl: data.discord_webhook_url ?? null,
+    notificationSettings: normalizeNotificationSettings(
+      data.discord_notification_settings ?? null,
+    ),
   };
 }
 

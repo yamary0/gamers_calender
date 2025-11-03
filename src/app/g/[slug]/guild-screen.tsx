@@ -41,6 +41,12 @@ type GuildDetailPayload = {
     ownerId: string;
     createdAt: string;
     webhookUrl: string | null;
+    notificationSettings: {
+      onSessionCreate: boolean;
+      onSessionJoin: boolean;
+      onSessionActivate: boolean;
+      onSessionStart: boolean;
+    };
   };
   membership: {
     guildId: string;
@@ -51,6 +57,13 @@ type GuildDetailPayload = {
   members: GuildMember[];
 };
 
+const defaultNotificationState = {
+  onSessionCreate: true,
+  onSessionJoin: true,
+  onSessionActivate: true,
+  onSessionStart: false,
+};
+
 export function GuildScreen({ slug }: GuildScreenProps) {
   const router = useRouter();
   const { user, session } = useAuth();
@@ -59,14 +72,17 @@ export function GuildScreen({ slug }: GuildScreenProps) {
   const [detail, setDetail] = useState<GuildDetailPayload | null>(null);
   const [members, setMembers] = useState<GuildMember[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editWebhook, setEditWebhook] = useState("");
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
-  const [invitePending, setInvitePending] = useState(false);
-  const [isMutating, startMutation] = useTransition();
+const [detailLoading, setDetailLoading] = useState(false);
+const [editName, setEditName] = useState("");
+const [editWebhook, setEditWebhook] = useState("");
+const [actionError, setActionError] = useState<string | null>(null);
+const [inviteLink, setInviteLink] = useState<string | null>(null);
+const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+const [invitePending, setInvitePending] = useState(false);
+const [notificationSettings, setNotificationSettings] = useState({
+  ...defaultNotificationState,
+});
+const [isMutating, startMutation] = useTransition();
 
   const guild = useMemo(
     () => guilds.find((item) => item.slug === slug) ?? null,
@@ -103,6 +119,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
       setMembers(payload.data.members);
       setEditName(payload.data.guild.name);
       setEditWebhook(payload.data.guild.webhookUrl ?? "");
+      setNotificationSettings(payload.data.guild.notificationSettings);
       setInviteLink(null);
       setInviteMessage(null);
     } catch (err) {
@@ -120,9 +137,16 @@ export function GuildScreen({ slug }: GuildScreenProps) {
   }, [loadDetail]);
 
   useEffect(() => {
+    if (detail) {
+      setNotificationSettings(detail.guild.notificationSettings);
+    }
+  }, [detail]);
+
+  useEffect(() => {
     if (guild && !detail) {
       setEditName(guild.name);
       setEditWebhook("");
+      setNotificationSettings({ ...defaultNotificationState });
     }
   }, [guild, detail]);
 
@@ -198,6 +222,17 @@ export function GuildScreen({ slug }: GuildScreenProps) {
       const normalizedWebhook = webhookValue.length > 0 ? webhookValue : null;
       if (!detail || normalizedWebhook !== (detail.guild.webhookUrl ?? null)) {
         updatePayload.discordWebhookUrl = normalizedWebhook;
+      }
+
+      const notificationsChanged =
+        !detail ||
+        Object.entries(notificationSettings).some(
+          ([key, value]) =>
+            value !== detail.guild.notificationSettings[key as keyof typeof notificationSettings],
+        );
+
+      if (notificationsChanged) {
+        updatePayload.notificationSettings = notificationSettings;
       }
 
       if (Object.keys(updatePayload).length === 0) {
@@ -562,6 +597,65 @@ export function GuildScreen({ slug }: GuildScreenProps) {
                   Leave blank to disable notifications for this guild.
                 </p>
               </div>
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Notification events
+                </legend>
+                <div className="flex flex-col gap-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.onSessionCreate}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          onSessionCreate: event.target.checked,
+                        }))
+                      }
+                    />
+                    Session created
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.onSessionJoin}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          onSessionJoin: event.target.checked,
+                        }))
+                      }
+                    />
+                    Participant joined
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.onSessionActivate}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          onSessionActivate: event.target.checked,
+                        }))
+                      }
+                    />
+                    Session becomes active
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notificationSettings.onSessionStart}
+                      onChange={(event) =>
+                        setNotificationSettings((prev) => ({
+                          ...prev,
+                          onSessionStart: event.target.checked,
+                        }))
+                      }
+                    />
+                    When the session starts
+                  </label>
+                </div>
+              </fieldset>
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={isMutating}>
                   Save changes
@@ -573,6 +667,9 @@ export function GuildScreen({ slug }: GuildScreenProps) {
                   onClick={() => {
                     setEditName(detail?.guild.name ?? guild.name);
                     setEditWebhook(detail?.guild.webhookUrl ?? "");
+                    setNotificationSettings(
+                      detail?.guild.notificationSettings ?? { ...defaultNotificationState },
+                    );
                   }}
                 >
                   Reset

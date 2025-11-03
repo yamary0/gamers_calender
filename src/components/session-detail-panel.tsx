@@ -58,10 +58,16 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
   const accessToken = authSession?.access_token ?? null;
   const canMutate = Boolean(accessToken);
   const guildId = session.guildId;
+  const userId = user?.id ?? null;
+  const isParticipant = Boolean(
+    userId && session.participants.some((participant) => participant.id === userId),
+  );
 
   const createdLabel = format(parseISO(session.createdAt), "MMM d, yyyy HH:mm");
   const participantCount = `${session.participants.length}/${session.maxPlayers}`;
-  const canJoin = canMutate && Boolean(guildId) && session.status !== "active";
+  const canAttemptJoin = session.status !== "active";
+  const actionDisabled =
+    isPending || !canMutate || !guildId || (!isParticipant && !canAttemptJoin);
 
   const applySessionToEditForm = (source: Session) => {
     setEditTitle(source.title);
@@ -95,9 +101,21 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
     return payload.data;
   };
 
-  const handleJoin = () => {
+  const handleParticipationToggle = () => {
     if (!canMutate || !guildId) {
-      setFormError(!canMutate ? "Sign in to join sessions." : "Select a guild first.");
+      setFormError(!canMutate ? "Sign in to manage sessions." : "Select a guild first.");
+      return;
+    }
+
+    if (isParticipant) {
+      const confirmed =
+        typeof window === "undefined" ||
+        window.confirm("Leave this session? Your spot will open for other members.");
+      if (!confirmed) {
+        return;
+      }
+    } else if (!canAttemptJoin) {
+      setFormError("Session is already active.");
       return;
     }
 
@@ -108,20 +126,23 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
         if (accessToken) {
           headers.Authorization = `Bearer ${accessToken}`;
         }
-        const response = await fetch(`/api/guilds/${guildId}/sessions/${session.id}/join`, {
-          method: "POST",
-          headers,
-        });
+        const response = await fetch(
+          `/api/guilds/${guildId}/sessions/${session.id}/join`,
+          {
+            method: isParticipant ? "DELETE" : "POST",
+            headers,
+          },
+        );
         if (!response.ok) {
           const body = (await response.json().catch(() => null)) as
             | { error?: string }
             | null;
-          throw new Error(body?.error ?? "Failed to join session");
+          throw new Error(body?.error ?? "Failed to update session membership");
         }
         await refreshSessionData();
       } catch (error) {
         setFormError(
-          error instanceof Error ? error.message : "Unable to join session",
+          error instanceof Error ? error.message : "Unable to update session membership",
         );
       }
     });
@@ -408,18 +429,22 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              onClick={handleJoin}
-              disabled={isPending || !canJoin}
+              onClick={handleParticipationToggle}
+              disabled={actionDisabled}
             >
               {!canMutate
-                ? "Sign in to join"
+                ? "Sign in to manage"
                 : !guildId
                   ? "Select a guild"
-                : session.status === "active"
-                  ? "Session ready"
-                  : isPending
-                    ? "Joining..."
-                    : "Join session"}
+                  : isParticipant
+                    ? isPending
+                      ? "Leaving..."
+                      : "Leave session"
+                    : session.status === "active"
+                      ? "Session ready"
+                      : isPending
+                        ? "Joining..."
+                        : "Join session"}
             </Button>
             <Button
               type="button"

@@ -427,6 +427,11 @@ export type JoinSessionResult = {
   activated: boolean;
 };
 
+export type LeaveSessionResult = {
+  session: Session;
+  reopened: boolean;
+};
+
 export async function joinSession(
   id: string,
   userId: string,
@@ -488,6 +493,83 @@ export async function joinSession(
   return {
     session: mapRowToSession(refreshed, profiles),
     activated: shouldActivate,
+  };
+}
+
+export async function leaveSession(
+  id: string,
+  userId: string,
+  expectedGuildId?: string,
+): Promise<LeaveSessionResult> {
+  const supabase = admin();
+  const existing = await fetchSessionById(id);
+
+  if (!existing) {
+    throw new Error("Session not found");
+  }
+
+  if (expectedGuildId && existing.guild_id !== expectedGuildId) {
+    throw new Error("Session does not belong to this guild");
+  }
+
+  const { data: currentParticipant } = await supabase
+    .from("participants")
+    .select("user_id")
+    .eq("session_id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!currentParticipant) {
+    const profiles = await loadParticipantProfiles(collectParticipantIds(existing));
+    return {
+      session: mapRowToSession(existing, profiles),
+      reopened: false,
+    };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("participants")
+    .delete()
+    .eq("session_id", id)
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw new Error(`Unable to leave session: ${deleteError.message}`);
+  }
+
+  let refreshed = await fetchSessionById(id);
+
+  if (!refreshed) {
+    throw new Error("Failed to reload session after leave.");
+  }
+
+  let reopened = false;
+
+  const participantTotal = refreshed.participants?.length ?? 0;
+  if (existing.status === "active" && participantTotal < existing.max_players) {
+    const { error: reopenError } = await supabase
+      .from("sessions")
+      .update({ status: "open" })
+      .eq("id", id);
+
+    if (reopenError) {
+      throw new Error(`Failed to reopen session: ${reopenError.message}`);
+    }
+
+    refreshed = await fetchSessionById(id);
+
+    if (!refreshed) {
+      throw new Error("Failed to reload session after reopen.");
+    }
+
+    reopened = true;
+  }
+
+  const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+
+  return {
+    session: mapRowToSession(refreshed, profiles),
+    reopened,
   };
 }
 

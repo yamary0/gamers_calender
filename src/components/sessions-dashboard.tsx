@@ -41,7 +41,7 @@ export function SessionsDashboard({
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const {
     guilds,
     selectedGuildId,
@@ -52,6 +52,7 @@ export function SessionsDashboard({
   const canMutate = Boolean(accessToken);
   const hasGuild = Boolean(selectedGuildId);
   const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
+  const userId = user?.id ?? null;
   async function refreshSessions() {
     if (!canMutate || !selectedGuildId) {
       setSessions([]);
@@ -219,11 +220,28 @@ export function SessionsDashboard({
     });
   };
 
-  function handleJoin(sessionId: string) {
+  function handleToggleParticipation(targetSession: Session) {
     if (!canMutate || !selectedGuildId) {
-      setFormError(!canMutate ? "Sign in to join sessions." : "Select a guild first.");
+      setFormError(!canMutate ? "Sign in to manage sessions." : "Select a guild first.");
       return;
     }
+
+    const isParticipant = Boolean(
+      userId && targetSession.participants.some((participant) => participant.id === userId),
+    );
+
+    if (isParticipant) {
+      const confirmed =
+        typeof window === "undefined" ||
+        window.confirm("Leave this session? Your spot will open for other members.");
+      if (!confirmed) {
+        return;
+      }
+    } else if (targetSession.status === "active") {
+      setFormError("Session is already active.");
+      return;
+    }
+
     startTransition(async () => {
       setFormError(null);
       try {
@@ -232,22 +250,29 @@ export function SessionsDashboard({
           headers.Authorization = `Bearer ${accessToken}`;
         }
 
-        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions/${sessionId}/join`, {
-          method: "POST",
-          headers,
-        });
+        const response = await fetch(
+          `/api/guilds/${selectedGuildId}/sessions/${targetSession.id}/join`,
+          {
+            method: isParticipant ? "DELETE" : "POST",
+            headers,
+          },
+        );
 
         if (!response.ok) {
           const body = (await response.json().catch(() => null)) as
             | { error?: string }
             | null;
-          throw new Error(body?.error ?? "Failed to join session");
+          throw new Error(
+            body?.error ?? (isParticipant ? "Failed to leave session" : "Failed to join session"),
+          );
         }
 
         await refreshSessions();
       } catch (error) {
         setFormError(
-          error instanceof Error ? error.message : "Unable to join session",
+          error instanceof Error
+            ? error.message
+            : "Unable to update session membership",
         );
       }
     });
@@ -523,6 +548,9 @@ export function SessionsDashboard({
                 {sessions.map((session) => {
                   const participants = `${session.participants.length}/${session.maxPlayers}`;
                   const isFull = session.status === "active";
+                  const isParticipant = Boolean(
+                    userId && session.participants.some((participant) => participant.id === userId),
+                  );
                   return (
                     <li
                       key={session.id}
@@ -553,16 +581,27 @@ export function SessionsDashboard({
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
-                            onClick={() => handleJoin(session.id)}
-                            disabled={isPending || isFull || !canMutate}
+                            onClick={() => handleToggleParticipation(session)}
+                            disabled={
+                              isPending ||
+                              !canMutate ||
+                              !isParticipant &&
+                                (isFull || !selectedGuildId)
+                            }
                           >
                             {!canMutate
                               ? "Sign in"
-                              : isFull
-                                ? "Ready"
-                                : isPending
-                                  ? "Joining..."
-                                  : "Join"}
+                              : !selectedGuildId
+                                ? "Select guild"
+                                : isParticipant
+                                  ? isPending
+                                    ? "Leaving..."
+                                    : "Leave"
+                                  : isFull
+                                    ? "Ready"
+                                    : isPending
+                                      ? "Joining..."
+                                      : "Join"}
                           </Button>
                           <Button asChild variant="secondary">
                             <Link

@@ -48,14 +48,6 @@ export default async function Home() {
 
   return (
     <div className="w-full space-y-8">
-      <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Gamers Calendar
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Gamers meetup scheduler prototype
-        </p>
-      </div>
 
       <SessionsDashboard initialSessions={[]} />
 

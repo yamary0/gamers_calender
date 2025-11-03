@@ -24,9 +24,10 @@ import type { Session } from "@/services/session-store";
 
 type SessionDetailPanelProps = {
   initialSession: Session;
+  backHref?: string;
 };
 
-export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) {
+export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPanelProps) {
   const router = useRouter();
   const [session, setSession] = useState<Session>(initialSession);
   const [formError, setFormError] = useState<string | null>(null);
@@ -56,10 +57,11 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
 
   const accessToken = authSession?.access_token ?? null;
   const canMutate = Boolean(accessToken);
+  const guildId = session.guildId;
 
   const createdLabel = format(parseISO(session.createdAt), "MMM d, yyyy HH:mm");
   const participantCount = `${session.participants.length}/${session.maxPlayers}`;
-  const canJoin = canMutate && session.status !== "active";
+  const canJoin = canMutate && Boolean(guildId) && session.status !== "active";
 
   const applySessionToEditForm = (source: Session) => {
     setEditTitle(source.title);
@@ -72,10 +74,13 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
   };
 
   const refreshSessionData = async () => {
+    if (!guildId) {
+      throw new Error("Session is not associated with a guild.");
+    }
     const headers: HeadersInit = accessToken
       ? { Authorization: `Bearer ${accessToken}` }
       : {};
-    const response = await fetch(`/api/sessions/${session.id}`, {
+    const response = await fetch(`/api/guilds/${guildId}/sessions/${session.id}`, {
       cache: "no-store",
       headers,
     });
@@ -91,8 +96,8 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
   };
 
   const handleJoin = () => {
-    if (!canMutate) {
-      setFormError("Sign in to join sessions.");
+    if (!canMutate || !guildId) {
+      setFormError(!canMutate ? "Sign in to join sessions." : "Select a guild first.");
       return;
     }
 
@@ -103,7 +108,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
         if (accessToken) {
           headers.Authorization = `Bearer ${accessToken}`;
         }
-        const response = await fetch(`/api/sessions/${session.id}/join`, {
+        const response = await fetch(`/api/guilds/${guildId}/sessions/${session.id}/join`, {
           method: "POST",
           headers,
         });
@@ -124,8 +129,8 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
 
   const handleUpdate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
-    if (!canMutate) {
-      setFormError("Sign in to update sessions.");
+    if (!canMutate || !guildId) {
+      setFormError(!canMutate ? "Sign in to update sessions." : "Select a guild first.");
       return;
     }
 
@@ -144,7 +149,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
           editStartAt,
           editEndAt,
         );
-        const response = await fetch(`/api/sessions/${session.id}`, {
+        const response = await fetch(`/api/guilds/${guildId}/sessions/${session.id}`, {
           method: "PATCH",
           headers,
           body: JSON.stringify({
@@ -172,8 +177,8 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
   };
 
   const handleDelete = () => {
-    if (!canMutate) {
-      setFormError("Sign in to delete sessions.");
+    if (!canMutate || !guildId) {
+      setFormError(!canMutate ? "Sign in to delete sessions." : "Select a guild first.");
       return;
     }
 
@@ -193,7 +198,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
         if (accessToken) {
           headers.Authorization = `Bearer ${accessToken}`;
         }
-        const response = await fetch(`/api/sessions/${session.id}`, {
+        const response = await fetch(`/api/guilds/${guildId}/sessions/${session.id}`, {
           method: "DELETE",
           headers,
         });
@@ -205,7 +210,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
         }
 
         await refreshSession();
-        router.push("/");
+        router.push(backHref ?? "/");
         router.refresh();
       } catch (error) {
         setFormError(
@@ -240,9 +245,12 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      {!guildId && (
+        <ErrorToast message="This session is not associated with a guild. Actions are limited." />
+      )}
       <div className="flex items-center justify-between">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/">← Back to dashboard</Link>
+          <Link href={backHref ?? "/"}>← Back</Link>
         </Button>
         <div className="flex items-center gap-2">
           <Button
@@ -405,6 +413,8 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
             >
               {!canMutate
                 ? "Sign in to join"
+                : !guildId
+                  ? "Select a guild"
                 : session.status === "active"
                   ? "Session ready"
                   : isPending
@@ -415,7 +425,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
               type="button"
               variant="outline"
               onClick={isEditing ? cancelEditing : beginEditing}
-              disabled={isPending || !canMutate}
+              disabled={isPending || !canMutate || !guildId}
             >
               {isEditing ? "Cancel" : "Edit session"}
             </Button>
@@ -440,6 +450,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
                   required
                   minLength={3}
                   className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  disabled={!canMutate || !guildId || isPending}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -457,6 +468,7 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
                   onChange={(event) => setEditMaxPlayers(event.target.value)}
                   required
                   className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  disabled={!canMutate || !guildId || isPending}
                 />
               </div>
               <fieldset className="space-y-2">
@@ -464,12 +476,12 @@ export function SessionDetailPanel({ initialSession }: SessionDetailPanelProps) 
                   Schedule
                 </legend>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={editScheduleKind === "none" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setEditScheduleKind("none")}
-                  >
+                <Button
+                  type="button"
+                  variant={editScheduleKind === "none" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setEditScheduleKind("none")}
+                >
                     None
                   </Button>
                   <Button

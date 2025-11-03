@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { AuthProvider } from "@/components/auth-provider";
+import { GuildProvider } from "@/components/guild-provider";
+import { GuildSwitcher } from "@/components/guild-switcher";
 import { UserMenu } from "@/components/user-menu";
 
 const geistSans = Geist({
@@ -31,30 +33,35 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <div className="flex min-h-screen flex-col bg-background text-foreground">
-            <header className="border-b">
-              <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
-                <Link
-                  href="/"
-                  className="text-sm font-semibold uppercase tracking-wide text-muted-foreground transition hover:text-foreground"
-                >
-                  Gamers Calendar
-                </Link>
-                <UserMenu />
-              </div>
-            </header>
+          <GuildProvider>
+            <div className="flex min-h-screen flex-col bg-background text-foreground">
+              <header className="border-b">
+                <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
+                  <Link
+                    href="/"
+                    className="text-sm font-semibold uppercase tracking-wide text-muted-foreground transition hover:text-foreground"
+                  >
+                    Gamers Calendar
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    <GuildSwitcher />
+                    <UserMenu />
+                  </div>
+                </div>
+              </header>
 
-            <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10">
-              {children}
-            </main>
+              <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10">
+                {children}
+              </main>
 
-            <footer className="border-t">
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                <span>© {new Date().getFullYear()} Gamers Calendar.</span>
-                <span>Phase-based local development build.</span>
-              </div>
-            </footer>
-          </div>
+              <footer className="border-t">
+                <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>© {new Date().getFullYear()} Gamers Calendar.</span>
+                  <span>Phase-based local development build.</span>
+                </div>
+              </footer>
+            </div>
+          </GuildProvider>
         </AuthProvider>
       </body>
     </html>

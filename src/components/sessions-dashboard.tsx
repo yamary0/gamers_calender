@@ -20,6 +20,7 @@ import {
   buildSchedulePayload,
   type ScheduleKind,
 } from "@/lib/schedule-utils";
+import { useGuilds } from "@/components/guild-provider";
 import type { Session } from "@/services/session-store";
 
 type SessionsDashboardProps = {
@@ -39,13 +40,23 @@ export function SessionsDashboard({
   const [createEndAt, setCreateEndAt] = useState("");
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [invitePending, setInvitePending] = useState(false);
 
   const { session } = useAuth();
+  const {
+    guilds,
+    selectedGuildId,
+    loading: guildLoading,
+  } = useGuilds();
 
   const accessToken = session?.access_token ?? null;
   const canMutate = Boolean(accessToken);
+  const hasGuild = Boolean(selectedGuildId);
+  const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
   async function refreshSessions() {
-    if (!canMutate) {
+    if (!canMutate || !selectedGuildId) {
       setSessions([]);
       return;
     }
@@ -54,7 +65,7 @@ export function SessionsDashboard({
       ? { Authorization: `Bearer ${accessToken}` }
       : {};
 
-    const response = await fetch("/api/sessions", {
+    const response = await fetch(`/api/guilds/${selectedGuildId}/sessions`, {
       cache: "no-store",
       headers,
     });
@@ -72,6 +83,14 @@ export function SessionsDashboard({
   }
 
   const openCreateForm = () => {
+    if (!canMutate) {
+      setFormError("Sign in to create sessions.");
+      return;
+    }
+    if (!hasGuild) {
+      setFormError("Select a guild first.");
+      return;
+    }
     setFormError(null);
     setCreateScheduleKind("none");
     setCreateAllDayDate("");
@@ -107,7 +126,7 @@ export function SessionsDashboard({
   useEffect(() => {
     let cancelled = false;
 
-    if (!canMutate) {
+    if (!canMutate || !selectedGuildId) {
       setSessions([]);
       return;
     }
@@ -117,7 +136,7 @@ export function SessionsDashboard({
         const headers: HeadersInit = accessToken
           ? { Authorization: `Bearer ${accessToken}` }
           : {};
-        const response = await fetch("/api/sessions", {
+        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions`, {
           cache: "no-store",
           headers,
         });
@@ -146,12 +165,17 @@ export function SessionsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [canMutate, accessToken]);
+  }, [canMutate, accessToken, selectedGuildId]);
+
+  useEffect(() => {
+    setInviteLink(null);
+    setInviteMessage(null);
+  }, [selectedGuildId]);
 
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
-    if (!canMutate) {
-      setFormError("Sign in to create sessions.");
+    if (!canMutate || !selectedGuildId) {
+      setFormError(!canMutate ? "Sign in to create sessions." : "Select a guild first.");
       return;
     }
     const form = event.currentTarget;
@@ -175,7 +199,7 @@ export function SessionsDashboard({
           createEndAt,
         );
 
-        const response = await fetch("/api/sessions", {
+        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions`, {
           method: "POST",
           headers,
           body: JSON.stringify({ title, maxPlayers, schedule }),
@@ -204,8 +228,8 @@ export function SessionsDashboard({
   };
 
   function handleJoin(sessionId: string) {
-    if (!canMutate) {
-      setFormError("Sign in to join sessions.");
+    if (!canMutate || !selectedGuildId) {
+      setFormError(!canMutate ? "Sign in to join sessions." : "Select a guild first.");
       return;
     }
     startTransition(async () => {
@@ -216,7 +240,7 @@ export function SessionsDashboard({
           headers.Authorization = `Bearer ${accessToken}`;
         }
 
-        const response = await fetch(`/api/sessions/${sessionId}/join`, {
+        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions/${sessionId}/join`, {
           method: "POST",
           headers,
         });
@@ -237,37 +261,140 @@ export function SessionsDashboard({
     });
   }
 
+  const generateInviteLink = async () => {
+    if (!canMutate || !selectedGuildId) {
+      setFormError(!canMutate ? "Sign in to generate invitations." : "Select a guild first.");
+      return;
+    }
+    setInvitePending(true);
+    setInviteMessage(null);
+    try {
+      const headers: HeadersInit = accessToken
+        ? {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        : {};
+      const response = await fetch(`/api/guilds/${selectedGuildId}/invitations`, {
+        method: "POST",
+        headers,
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Failed to create invitation");
+      }
+      const payload = (await response.json()) as { data: { token: string; url: string } };
+      setInviteLink(payload.data.url);
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(payload.data.url);
+          setInviteMessage("Invite link copied to clipboard.");
+        } catch {
+          setInviteMessage("Invite link generated.");
+        }
+      } else {
+        setInviteMessage("Invite link generated.");
+      }
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Unable to generate invite link");
+    } finally {
+      setInvitePending(false);
+    }
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(inviteLink);
+        setInviteMessage("Invite link copied to clipboard.");
+      } catch {
+        setInviteMessage("Copy failed. Copy manually.");
+      }
+    } else {
+      setInviteMessage("Copy unsupported. Copy manually.");
+    }
+  };
+
 
   return (
     <section className="space-y-6">
       {formError && <ErrorToast message={formError} />}
 
-      <div
-        role="tablist"
-        aria-label="Session view"
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
-      >
-        <Button
-          type="button"
-          role="tab"
-          aria-selected={activeView === "feed"}
-          variant={activeView === "feed" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveView("feed")}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          role="tablist"
+          aria-label="Session view"
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
         >
-          Feed
-        </Button>
-        <Button
-          type="button"
-          role="tab"
-          aria-selected={activeView === "calendar"}
-          variant={activeView === "calendar" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveView("calendar")}
-        >
-          Calendar
-        </Button>
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "feed"}
+            variant={activeView === "feed" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveView("feed")}
+          >
+            Feed
+          </Button>
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "calendar"}
+            variant={activeView === "calendar" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveView("calendar")}
+          >
+            Calendar
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {guildLoading ? (
+            <span>Loading guilds…</span>
+          ) : guilds.length === 0 ? (
+            <span>Create or join a guild to start sharing sessions.</span>
+          ) : (
+            <span>
+              Viewing guild: <strong>{guilds.find((guild) => guild.id === selectedGuildId)?.name ?? "Select"}</strong>
+            </span>
+          )}
+        </div>
       </div>
+
+      {canMutate && hasGuild && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Invite guildmates</CardTitle>
+            <CardDescription>
+              Generate a link to share with others so they can join this guild.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={generateInviteLink}
+                disabled={invitePending}
+              >
+                {invitePending ? "Generating…" : "Generate invite link"}
+              </Button>
+              {inviteLink && (
+                <Button type="button" size="sm" variant="outline" onClick={copyInviteLink}>
+                  Copy link
+                </Button>
+              )}
+            </div>
+            {inviteLink && (
+              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+                {inviteLink}
+              </div>
+            )}
+            {inviteMessage && (
+              <p className="text-xs text-muted-foreground">{inviteMessage}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {isCreateOpen && (
         <Card>
@@ -294,6 +421,11 @@ export function SessionsDashboard({
                   Sign in via the user menu to create sessions.
                 </p>
               )}
+              {canMutate && !hasGuild && (
+                <p className="text-xs text-muted-foreground">
+                  Select a guild before creating a session.
+                </p>
+              )}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="create-title">
                   Title
@@ -307,7 +439,7 @@ export function SessionsDashboard({
                   required
                   className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   placeholder="Game night in Shibuya"
-                  disabled={!canMutate || isPending}
+                  disabled={!canMutate || !hasGuild || isPending}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -322,7 +454,7 @@ export function SessionsDashboard({
                   required
                   defaultValue={4}
                   className="max-w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  disabled={!canMutate || isPending}
+                  disabled={!canMutate || !hasGuild || isPending}
                 />
               </div>
               <fieldset className="space-y-3">
@@ -335,7 +467,7 @@ export function SessionsDashboard({
                     variant={createScheduleKind === "none" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setCreateScheduleKind("none")}
-                    disabled={!canMutate || isPending}
+                    disabled={!canMutate || !hasGuild || isPending}
                   >
                     None
                   </Button>
@@ -344,7 +476,7 @@ export function SessionsDashboard({
                     variant={createScheduleKind === "all-day" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setCreateScheduleKind("all-day")}
-                    disabled={!canMutate || isPending}
+                    disabled={!canMutate || !hasGuild || isPending}
                   >
                     All day
                   </Button>
@@ -353,7 +485,7 @@ export function SessionsDashboard({
                     variant={createScheduleKind === "timed" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setCreateScheduleKind("timed")}
-                    disabled={!canMutate || isPending}
+                    disabled={!canMutate || !hasGuild || isPending}
                   >
                     Timed
                   </Button>
@@ -370,7 +502,7 @@ export function SessionsDashboard({
                       value={createAllDayDate}
                       onChange={(event) => setCreateAllDayDate(event.target.value)}
                       className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      disabled={!canMutate || isPending}
+                      disabled={!canMutate || !hasGuild || isPending}
                       required
                     />
                   </div>
@@ -401,15 +533,21 @@ export function SessionsDashboard({
                         value={createEndAt}
                         onChange={(event) => setCreateEndAt(event.target.value)}
                         className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        disabled={!canMutate || isPending}
+                        disabled={!canMutate || !hasGuild || isPending}
                       />
                     </div>
                   </div>
                 )}
               </fieldset>
               <div className="flex items-center gap-2">
-                <Button type="submit" disabled={isPending || !canMutate}>
-                  {!canMutate ? "Sign in to create" : isPending ? "Saving..." : "Create"}
+                <Button type="submit" disabled={isPending || !canMutate || !hasGuild}>
+                  {!canMutate
+                    ? "Sign in to create"
+                    : !hasGuild
+                      ? "Select a guild"
+                      : isPending
+                        ? "Saving..."
+                        : "Create"}
                 </Button>
                 <Button
                   type="button"
@@ -429,7 +567,7 @@ export function SessionsDashboard({
         {activeView === "calendar" ? (
           <SessionsCalendar
             sessions={calendarSessions}
-            onCreateSession={openCreateForm}
+            onCreateSession={canMutate && hasGuild ? openCreateForm : undefined}
           />
         ) : (
           <Card>
@@ -444,6 +582,7 @@ export function SessionsDashboard({
                   variant="outline"
                   size="sm"
                   onClick={openCreateForm}
+                  disabled={!canMutate || !hasGuild}
                 >
                   + Session
                 </Button>
@@ -474,9 +613,11 @@ export function SessionsDashboard({
               <ul className="space-y-3">
                 {sessions.length === 0 && (
                   <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                    {canMutate
-                      ? "No sessions yet. Use + Session to add one."
-                      : "Sign in to view available sessions."}
+                    {!canMutate
+                      ? "Sign in to view guild sessions."
+                      : !hasGuild
+                        ? "Select or create a guild to view sessions."
+                        : "No sessions yet. Use + Session to add one."}
                   </li>
                 )}
                 {sessions.map((session) => {
@@ -524,7 +665,11 @@ export function SessionsDashboard({
                                   : "Join"}
                           </Button>
                           <Button asChild variant="secondary">
-                            <Link href={`/sessions/${session.id}`}>
+                            <Link
+                              href={selectedGuild?.slug
+                                ? `/g/${selectedGuild.slug}/sessions/${session.id}`
+                                : `/sessions/${session.id}`}
+                            >
                               Details
                             </Link>
                           </Button>

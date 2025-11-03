@@ -19,6 +19,7 @@ export type Session = {
   title: string;
   maxPlayers: number;
   status: SessionStatus;
+  guildId: string | null;
   participants: SessionParticipant[];
   createdAt: string;
   schedule: SessionSchedule;
@@ -47,6 +48,7 @@ type SessionRow = {
   title: string;
   max_players: number;
   status: string;
+  guild_id: string | null;
   created_at: string;
   start_at: string | null;
   end_at: string | null;
@@ -91,6 +93,7 @@ const mapRowToSession = (
   title: row.title,
   maxPlayers: row.max_players,
   status: mapStatus(row.status),
+  guildId: row.guild_id ?? null,
   participants:
     row.participants?.map((participant) => {
       const profile = profiles.get(participant.user_id);
@@ -201,7 +204,7 @@ async function fetchSessionById(id: string): Promise<SessionRow | null> {
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id,title,max_players,status,created_at,start_at,end_at,all_day,participants(user_id)",
+      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -227,14 +230,18 @@ async function participantCount(sessionId: string): Promise<number> {
   return count ?? 0;
 }
 
-export async function listSessions(): Promise<Session[]> {
+export async function listSessions(guildId: string): Promise<Session[]> {
+  if (!guildId) {
+    return [];
+  }
   const supabase = admin();
 
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id,title,max_players,status,created_at,start_at,end_at,all_day,participants(user_id)",
+      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id)",
     )
+    .eq("guild_id", guildId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -263,6 +270,7 @@ export async function getSession(id: string): Promise<Session | null> {
 export async function createSession(
   payload: CreateSessionPayload,
   userId: string,
+  guildId: string,
 ): Promise<SessionMutationResult> {
   const supabase = admin();
   const scheduleCols = scheduleToColumns(payload.schedule);
@@ -273,12 +281,13 @@ export async function createSession(
       title: payload.title,
       max_players: payload.maxPlayers,
       status: "open",
+      guild_id: guildId,
       start_at: scheduleCols.start_at,
       end_at: scheduleCols.end_at,
       all_day: scheduleCols.all_day,
     })
     .select(
-      "id,title,max_players,status,created_at,start_at,end_at,all_day",
+      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day",
     )
     .single();
 
@@ -325,6 +334,7 @@ export async function createSession(
 export async function updateSession(
   id: string,
   payload: UpdateSessionPayload,
+  expectedGuildId?: string,
 ): Promise<SessionMutationResult> {
   if (
     payload.title === undefined &&
@@ -340,6 +350,10 @@ export async function updateSession(
 
   if (!existing) {
     throw new Error("Session not found");
+  }
+
+  if (expectedGuildId && existing.guild_id !== expectedGuildId) {
+    throw new Error("Session does not belong to this guild");
   }
 
   const updates: Record<string, unknown> = {};
@@ -416,12 +430,17 @@ export type JoinSessionResult = {
 export async function joinSession(
   id: string,
   userId: string,
+  expectedGuildId?: string,
 ): Promise<JoinSessionResult> {
   const supabase = admin();
   const session = await fetchSessionById(id);
 
   if (!session) {
     throw new Error("Session not found");
+  }
+
+  if (expectedGuildId && session.guild_id !== expectedGuildId) {
+    throw new Error("Session does not belong to this guild");
   }
 
   const { data: existing } = await supabase
@@ -472,12 +491,19 @@ export async function joinSession(
   };
 }
 
-export async function deleteSession(id: string): Promise<Session | null> {
+export async function deleteSession(
+  id: string,
+  expectedGuildId?: string,
+): Promise<Session | null> {
   const supabase = admin();
   const existing = await fetchSessionById(id);
 
   if (!existing) {
     return null;
+  }
+
+  if (expectedGuildId && existing.guild_id !== expectedGuildId) {
+    throw new Error("Session does not belong to this guild");
   }
 
   const { error } = await supabase.from("sessions").delete().eq("id", id);

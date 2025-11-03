@@ -18,6 +18,11 @@ export type GuildMembership = {
   joinedAt: string;
 };
 
+export type GuildMemberDetail = GuildMembership & {
+  displayName: string | null;
+  provider: string | null;
+};
+
 export type GuildWithRole = Guild & { role: GuildRole };
 
 const admin = () => getSupabaseServiceClient();
@@ -32,32 +37,37 @@ const slugify = (value: string): string => {
   return base.length > 0 ? base : `guild-${crypto.randomUUID().slice(0, 8)}`;
 };
 
-async function slugExists(slug: string): Promise<boolean> {
+async function slugExists(slug: string, excludeId?: string): Promise<boolean> {
   const supabase = admin();
-  const { data, error } = await supabase
+  let query = supabase
     .from("guilds")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
+    .select("id", { count: "exact", head: true })
+    .eq("slug", slug);
 
-  if (error && error.code !== "PGRST116") {
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
     throw new Error(`Failed to check slug: ${error.message}`);
   }
 
-  return Boolean(data);
+  return (count ?? 0) > 0;
 }
 
-async function generateUniqueSlug(name: string): Promise<string> {
+async function generateUniqueSlug(
+  name: string,
+  excludeId?: string,
+): Promise<string> {
   const base = slugify(name) || "guild";
-  const trimmedBase = base.slice(0, 40);
+  let candidate = base;
+  let suffix = 2;
 
-  const buildCandidate = () =>
-    `${trimmedBase}-${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
-
-  let candidate = buildCandidate();
-
-  while (await slugExists(candidate)) {
-    candidate = buildCandidate();
+  while (await slugExists(candidate, excludeId)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
   }
 
   return candidate;
@@ -211,6 +221,171 @@ export async function ensureGuildMembership(
     role: (data.role ?? "member") as GuildRole,
     joinedAt: data.joined_at,
   };
+}
+
+type MemberProfile = {
+  displayName: string | null;
+  provider: string | null;
+};
+
+async function loadMemberProfiles(
+  userIds: string[],
+): Promise<Map<string, MemberProfile>> {
+  const supabase = admin();
+  const profiles = new Map<string, MemberProfile>();
+  const uniqueIds = [...new Set(userIds)];
+
+  await Promise.all(
+    uniqueIds.map(async (userId) => {
+      try {
+        const { data, error } = await supabase.auth.admin.getUserById(userId);
+        if (error || !data?.user) {
+          return;
+        }
+        const user = data.user;
+        const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+        const displayName =
+          typeof metadata.name === "string"
+            ? metadata.name
+            : typeof metadata.full_name === "string"
+              ? metadata.full_name
+              : typeof metadata.user_name === "string"
+                ? metadata.user_name
+                : null;
+
+        const provider =
+          typeof user.app_metadata?.provider === "string"
+            ? (user.app_metadata.provider as string)
+            : Array.isArray(user.identities)
+              ? user.identities.find(
+                  (identity) =>
+                    identity &&
+                    typeof identity.provider === "string" &&
+                    identity.user_id === userId,
+                )?.provider ?? null
+              : null;
+
+        profiles.set(userId, {
+          displayName,
+          provider,
+        });
+      } catch {
+        // ignore individual failures
+      }
+    }),
+  );
+
+  return profiles;
+}
+
+export async function listGuildMembers(
+  guildId: string,
+): Promise<GuildMemberDetail[]> {
+  const supabase = admin();
+  const { data, error } = await supabase
+    .from("guild_members")
+    .select("guild_id,user_id,role,joined_at")
+    .eq("guild_id", guildId)
+    .order("joined_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to list guild members: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const profiles = await loadMemberProfiles(rows.map((row) => row.user_id));
+
+  return rows.map((row) => {
+    const profile = profiles.get(row.user_id);
+    return {
+      guildId: row.guild_id,
+      userId: row.user_id,
+      role: (row.role ?? "member") as GuildRole,
+      joinedAt: row.joined_at,
+      displayName: profile?.displayName ?? null,
+      provider: profile?.provider ?? null,
+    };
+  });
+}
+
+type UpdateGuildInput = {
+  name?: string;
+  slug?: string;
+};
+
+export async function updateGuild(
+  id: string,
+  input: UpdateGuildInput,
+): Promise<Guild> {
+  const supabase = admin();
+  const existing = await getGuildById(id);
+
+  if (!existing) {
+    throw new Error("Guild not found");
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (input.name !== undefined) {
+    if (typeof input.name !== "string") {
+      throw new Error("name must be a string");
+    }
+    const trimmed = input.name.trim();
+    if (trimmed.length < 3) {
+      throw new Error("name must be at least 3 characters");
+    }
+    updates.name = trimmed;
+  }
+
+  if (input.slug !== undefined) {
+    if (typeof input.slug !== "string") {
+      throw new Error("slug must be a string");
+    }
+    const trimmed = input.slug.trim();
+    if (trimmed.length === 0) {
+      throw new Error("slug must not be empty");
+    }
+    const base = slugify(trimmed);
+    if (!base) {
+      throw new Error("slug must contain alphanumeric characters");
+    }
+
+    const uniqueSlug =
+      base === existing.slug ? existing.slug : await generateUniqueSlug(base, id);
+
+    updates.slug = uniqueSlug;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return existing;
+  }
+
+  const { data, error } = await supabase
+    .from("guilds")
+    .update(updates)
+    .eq("id", id)
+    .select("id,name,slug,owner_id,created_at")
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to update guild: ${error?.message ?? "unknown"}`);
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    ownerId: data.owner_id,
+    createdAt: data.created_at,
+  };
+}
+
+export async function deleteGuild(id: string): Promise<void> {
+  const supabase = admin();
+  const { error } = await supabase.from("guilds").delete().eq("id", id);
+  if (error) {
+    throw new Error(`Failed to delete guild: ${error.message}`);
+  }
 }
 
 export async function createGuildInvitation(

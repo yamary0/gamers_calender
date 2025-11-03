@@ -40,9 +40,6 @@ export function SessionsDashboard({
   const [createEndAt, setCreateEndAt] = useState("");
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
-  const [invitePending, setInvitePending] = useState(false);
 
   const { session } = useAuth();
   const {
@@ -167,11 +164,6 @@ export function SessionsDashboard({
     };
   }, [canMutate, accessToken, selectedGuildId]);
 
-  useEffect(() => {
-    setInviteLink(null);
-    setInviteMessage(null);
-  }, [selectedGuildId]);
-
   const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
     if (!canMutate || !selectedGuildId) {
@@ -261,61 +253,6 @@ export function SessionsDashboard({
     });
   }
 
-  const generateInviteLink = async () => {
-    if (!canMutate || !selectedGuildId) {
-      setFormError(!canMutate ? "Sign in to generate invitations." : "Select a guild first.");
-      return;
-    }
-    setInvitePending(true);
-    setInviteMessage(null);
-    try {
-      const headers: HeadersInit = accessToken
-        ? {
-            Authorization: `Bearer ${accessToken}`,
-          }
-        : {};
-      const response = await fetch(`/api/guilds/${selectedGuildId}/invitations`, {
-        method: "POST",
-        headers,
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? "Failed to create invitation");
-      }
-      const payload = (await response.json()) as { data: { token: string; url: string } };
-      setInviteLink(payload.data.url);
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        try {
-          await navigator.clipboard.writeText(payload.data.url);
-          setInviteMessage("Invite link copied to clipboard.");
-        } catch {
-          setInviteMessage("Invite link generated.");
-        }
-      } else {
-        setInviteMessage("Invite link generated.");
-      }
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Unable to generate invite link");
-    } finally {
-      setInvitePending(false);
-    }
-  };
-
-  const copyInviteLink = async () => {
-    if (!inviteLink) return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(inviteLink);
-        setInviteMessage("Invite link copied to clipboard.");
-      } catch {
-        setInviteMessage("Copy failed. Copy manually.");
-      }
-    } else {
-      setInviteMessage("Copy unsupported. Copy manually.");
-    }
-  };
-
-
   return (
     <section className="space-y-6">
       {formError && <ErrorToast message={formError} />}
@@ -359,43 +296,6 @@ export function SessionsDashboard({
           )}
         </div>
       </div>
-
-      {canMutate && hasGuild && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Invite guildmates</CardTitle>
-            <CardDescription>
-              Generate a link to share with others so they can join this guild.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={generateInviteLink}
-                disabled={invitePending}
-              >
-                {invitePending ? "Generating…" : "Generate invite link"}
-              </Button>
-              {inviteLink && (
-                <Button type="button" size="sm" variant="outline" onClick={copyInviteLink}>
-                  Copy link
-                </Button>
-              )}
-            </div>
-            {inviteLink && (
-              <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs font-mono">
-                {inviteLink}
-              </div>
-            )}
-            {inviteMessage && (
-              <p className="text-xs text-muted-foreground">{inviteMessage}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {isCreateOpen && (
         <Card>
           <CardHeader>

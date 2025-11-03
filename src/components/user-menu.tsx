@@ -6,6 +6,9 @@ import type { User } from "@supabase/supabase-js";
 import { useAuth } from "@/components/auth-provider";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
+
+const EMAIL_AUTH_ENABLED = false;
 
 const getAvatarUrl = (user: User | null): string | null => {
   const candidate = user?.user_metadata?.avatar_url;
@@ -111,6 +114,12 @@ export function UserMenu() {
     });
   };
 
+  const handleDiscordSignIn = () => {
+    const redirectTo =
+      typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+    void signInWithDiscord(redirectTo);
+  };
+
   return (
     <div className="relative" ref={menuRef}>
       <Button
@@ -184,83 +193,95 @@ export function UserMenu() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={mode === "signIn" ? "default" : "outline"}
-                  onClick={() => setMode("signIn")}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={mode === "signUp" ? "default" : "outline"}
-                  onClick={() => setMode("signUp")}
-                >
-                  Sign up
-                </Button>
-              </div>
-              <form className="space-y-3" onSubmit={handleAuthSubmit}>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="menu-email">
-                    Email
-                  </label>
-                  <input
-                    id="menu-email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="menu-password">
-                    Password
-                  </label>
-                  <input
-                    id="menu-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    autoComplete={mode === "signIn" ? "current-password" : "new-password"}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                    placeholder="At least 6 characters"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={isPending}>
-                  {mode === "signIn" ? "Sign in" : "Create account"}
-                </Button>
-                {localError && <ErrorToast message={localError} />}
-                {authError && <ErrorToast message={authError} />}
-                {feedback && (
-                  <p className="text-xs text-muted-foreground">{feedback}</p>
-                )}
-              </form>
-              <div className="flex items-center justify-between border-t border-dashed border-border pt-3">
-                <span className="text-[11px] text-muted-foreground">Discord</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    signInWithDiscord(
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/auth/callback`
-                        : undefined,
-                    )
-                  }
-                  disabled={isPending}
-                >
-                  Continue
-                </Button>
-              </div>
+              {EMAIL_AUTH_ENABLED ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mode === "signIn" ? "default" : "outline"}
+                      onClick={() => setMode("signIn")}
+                    >
+                      Sign in
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mode === "signUp" ? "default" : "outline"}
+                      onClick={() => setMode("signUp")}
+                    >
+                      Sign up
+                    </Button>
+                  </div>
+                  <form className="space-y-3" onSubmit={handleAuthSubmit}>
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        className="text-xs font-medium text-muted-foreground"
+                        htmlFor="menu-email"
+                      >
+                        Email
+                      </label>
+                      <input
+                        id="menu-email"
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        placeholder="you@example.com"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        className="text-xs font-medium text-muted-foreground"
+                        htmlFor="menu-password"
+                      >
+                        Password
+                      </label>
+                      <input
+                        id="menu-password"
+                        type="password"
+                        required
+                        minLength={6}
+                        autoComplete={mode === "signIn" ? "current-password" : "new-password"}
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        placeholder="At least 6 characters"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                      {mode === "signIn" ? "Sign in" : "Create account"}
+                    </Button>
+                    {localError && <ErrorToast message={localError} />}
+                    {authError && <ErrorToast message={authError} />}
+                    {feedback && (
+                      <p className="text-xs text-muted-foreground">{feedback}</p>
+                    )}
+                  </form>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Email sign-in is temporarily unavailable. Use Discord instead.
+                </p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                className="flex w-full items-center justify-center gap-2 bg-[#5865f2] text-white hover:bg-[#4752c4]"
+                onClick={handleDiscordSignIn}
+                disabled={isPending}
+              >
+                <Image
+                  src="/Discord-Symbol-White.svg"
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="h-4 w-4"
+                />
+                <span>Sign in with Discord</span>
+              </Button>
             </div>
           )}
         </div>

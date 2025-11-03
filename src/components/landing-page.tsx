@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Image from "next/image";
 import {
   ArrowRight,
   CalendarClock,
@@ -97,7 +98,19 @@ export function LandingPage() {
             onClick={handleDiscordSignIn}
             disabled={loading}
           >
-            <span>Aligna で集まって遊ぶ</span>
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-sm font-semibold">Aligna で集まって遊ぶ</span>
+              <span className="mt-0.5 flex items-center gap-1 text-[11px] opacity-90">
+                <Image
+                  src="/Discord-Symbol-White.svg"
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5"
+                />
+                <span>Discordでサインイン</span>
+              </span>
+            </div>
             <ArrowRight className="size-4" aria-hidden="true" />
           </Button>
           <p className="text-xs text-foreground/60">

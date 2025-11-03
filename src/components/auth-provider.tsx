@@ -150,10 +150,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
       },
       signOut: async () => {
         if (!supabase) return;
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-          setAuthError(error.message);
-        } else {
+        try {
+          // 既にセッションが無ければ何もしない（モバイル環境での欠落に対応）
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (!sessionData?.session) {
+            setSession(null);
+            setUser(null);
+            setAuthError(null);
+            return;
+          }
+
+          // まずローカルのセッションを確実に破棄（モバイルSafar等のエッジ挙動対策）
+          await supabase.auth.signOut({ scope: "local" });
+
+          // グローバル（他デバイス）も可能であれば試みるが、失敗してもUX優先で握り潰す
+          try {
+            await supabase.auth.signOut({ scope: "global" });
+          } catch {
+            /* noop */
+          }
+
+          setSession(null);
+          setUser(null);
+          setAuthError(null);
+        } catch (e) {
+          // "Auth session missing!" などはUX優先で無視してサインアウト完了扱い
+          setSession(null);
+          setUser(null);
           setAuthError(null);
         }
       },

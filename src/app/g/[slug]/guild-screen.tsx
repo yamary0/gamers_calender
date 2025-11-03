@@ -40,6 +40,7 @@ type GuildDetailPayload = {
     slug: string;
     ownerId: string;
     createdAt: string;
+    webhookUrl: string | null;
   };
   membership: {
     guildId: string;
@@ -60,6 +61,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editWebhook, setEditWebhook] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
@@ -100,6 +102,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
       setDetail(payload.data);
       setMembers(payload.data.members);
       setEditName(payload.data.guild.name);
+      setEditWebhook(payload.data.guild.webhookUrl ?? "");
       setInviteLink(null);
       setInviteMessage(null);
     } catch (err) {
@@ -119,6 +122,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
   useEffect(() => {
     if (guild && !detail) {
       setEditName(guild.name);
+      setEditWebhook("");
     }
   }, [guild, detail]);
 
@@ -171,6 +175,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
 
   const isOwner = detail?.membership.role === "owner";
   const createdAt = detail?.guild.createdAt ?? null;
+  const webhookConfigured = detail?.guild.webhookUrl ?? null;
 
   const handleUpdate = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -183,8 +188,23 @@ export function GuildScreen({ slug }: GuildScreenProps) {
       setActionError("Name must be at least 3 characters.");
       return;
     }
+    const webhookValue = editWebhook.trim();
     startMutation(async () => {
       setActionError(null);
+      const updatePayload: Record<string, unknown> = {};
+      if (!detail || name !== detail.guild.name) {
+        updatePayload.name = name;
+      }
+      const normalizedWebhook = webhookValue.length > 0 ? webhookValue : null;
+      if (!detail || normalizedWebhook !== (detail.guild.webhookUrl ?? null)) {
+        updatePayload.discordWebhookUrl = normalizedWebhook;
+      }
+
+      if (Object.keys(updatePayload).length === 0) {
+        setActionError("No changes to save.");
+        return;
+      }
+
       try {
         const response = await fetch(`/api/guilds/${guild.id}`, {
           method: "PATCH",
@@ -192,7 +212,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify(updatePayload),
         });
 
         if (!response.ok) {
@@ -206,6 +226,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
         setDetail(payload.data);
         setMembers(payload.data.members);
         setEditName(payload.data.guild.name);
+        setEditWebhook(payload.data.guild.webhookUrl ?? "");
         await refreshGuilds();
       } catch (err) {
         setActionError(err instanceof Error ? err.message : "Failed to update guild.");
@@ -388,6 +409,14 @@ export function GuildScreen({ slug }: GuildScreenProps) {
                 {detail?.membership.role ?? "member"}
               </dd>
             </div>
+            <div className="space-y-1">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                Discord webhook
+              </dt>
+              <dd className="text-xs text-muted-foreground">
+                {webhookConfigured ?? "Not configured"}
+              </dd>
+            </div>
           </dl>
         </CardContent>
       </Card>
@@ -513,6 +542,26 @@ export function GuildScreen({ slug }: GuildScreenProps) {
                   disabled={isMutating}
                 />
               </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="guild-edit-webhook"
+                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Discord webhook URL
+                </label>
+                <input
+                  id="guild-edit-webhook"
+                  type="url"
+                  value={editWebhook}
+                  onChange={(event) => setEditWebhook(event.target.value)}
+                  placeholder="https://discord.com/api/webhooks/..."
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  disabled={isMutating}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Leave blank to disable notifications for this guild.
+                </p>
+              </div>
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={isMutating}>
                   Save changes
@@ -521,7 +570,10 @@ export function GuildScreen({ slug }: GuildScreenProps) {
                   type="button"
                   variant="outline"
                   disabled={isMutating}
-                  onClick={() => setEditName(detail?.guild.name ?? guild.name)}
+                  onClick={() => {
+                    setEditName(detail?.guild.name ?? guild.name);
+                    setEditWebhook(detail?.guild.webhookUrl ?? "");
+                  }}
                 >
                   Reset
                 </Button>

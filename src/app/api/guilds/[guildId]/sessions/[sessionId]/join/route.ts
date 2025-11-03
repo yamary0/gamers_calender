@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth-server";
-import { ensureGuildMembership } from "@/services/guild-store";
+import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import { joinSession, getSession } from "@/services/session-store";
 import { sendDiscordNotification } from "@/lib/discord";
 
@@ -34,11 +34,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    const guild = await getGuildById(guildId);
+    if (!guild) {
+      return NextResponse.json({ error: "Guild not found." }, { status: 404 });
+    }
+
     const result = await joinSession(sessionId, user.id, guildId);
     if (result.activated) {
-      await sendDiscordNotification({
-        content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
-      });
+      await sendDiscordNotification(
+        {
+          content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
+        },
+        guild.webhookUrl,
+      );
     }
     return NextResponse.json({ data: result.session });
   } catch (error) {

@@ -1,12 +1,15 @@
-const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-
 type DiscordWebhookPayload = {
   content?: string;
   username?: string;
   embeds?: Array<Record<string, unknown>>;
 };
 
-export async function sendDiscordNotification(payload: DiscordWebhookPayload) {
+export async function sendDiscordNotification(
+  payload: DiscordWebhookPayload,
+  overrideUrl?: string | null,
+) {
+  const webhookUrl = overrideUrl ?? null;
+
   if (!webhookUrl) {
     return;
   }

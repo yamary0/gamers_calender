@@ -9,6 +9,7 @@ export type Guild = {
   slug: string;
   ownerId: string;
   createdAt: string;
+  webhookUrl: string | null;
 };
 
 export type GuildMembership = {
@@ -79,7 +80,7 @@ export async function listGuildsForUser(
   const supabase = admin();
   const { data, error } = await supabase
     .from("guild_members")
-    .select("role,joined_at,guilds(id,name,slug,owner_id,created_at)")
+    .select("role,joined_at,guilds(id,name,slug,owner_id,created_at,discord_webhook_url)")
     .eq("user_id", userId)
     .order("joined_at", { ascending: true });
 
@@ -89,13 +90,23 @@ export async function listGuildsForUser(
 
   return (
     data?.map((row) => {
-      const guild = Array.isArray(row.guilds) ? row.guilds[0] : row.guilds;
+      const guild = (Array.isArray(row.guilds) ? row.guilds[0] : row.guilds) as
+        | {
+            id?: string;
+            name?: string;
+            slug?: string;
+            owner_id?: string;
+            created_at?: string;
+            discord_webhook_url?: string | null;
+          }
+        | null;
       return {
         id: guild?.id ?? "",
         name: guild?.name ?? "",
         slug: guild?.slug ?? "",
         ownerId: guild?.owner_id ?? "",
         createdAt: guild?.created_at ?? "",
+        webhookUrl: guild?.discord_webhook_url ?? null,
         role: (row.role ?? "member") as GuildRole,
       };
     }) ?? []
@@ -106,7 +117,7 @@ export async function getGuildBySlug(slug: string): Promise<Guild | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("guilds")
-    .select("id,name,slug,owner_id,created_at")
+    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -124,6 +135,7 @@ export async function getGuildBySlug(slug: string): Promise<Guild | null> {
     slug: data.slug,
     ownerId: data.owner_id,
     createdAt: data.created_at,
+    webhookUrl: data.discord_webhook_url ?? null,
   };
 }
 
@@ -131,7 +143,7 @@ export async function getGuildById(id: string): Promise<Guild | null> {
   const supabase = admin();
   const { data, error } = await supabase
     .from("guilds")
-    .select("id,name,slug,owner_id,created_at")
+    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
     .eq("id", id)
     .maybeSingle();
 
@@ -149,6 +161,7 @@ export async function getGuildById(id: string): Promise<Guild | null> {
     slug: data.slug,
     ownerId: data.owner_id,
     createdAt: data.created_at,
+    webhookUrl: data.discord_webhook_url ?? null,
   };
 }
 
@@ -166,7 +179,7 @@ export async function createGuild(
       slug,
       owner_id: ownerId,
     })
-    .select("id,name,slug,owner_id,created_at")
+    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
     .single();
 
   if (error || !data) {
@@ -191,6 +204,7 @@ export async function createGuild(
     slug: data.slug,
     ownerId: data.owner_id,
     createdAt: data.created_at,
+    webhookUrl: data.discord_webhook_url ?? null,
     role: "owner",
   };
 }
@@ -311,6 +325,7 @@ export async function listGuildMembers(
 type UpdateGuildInput = {
   name?: string;
   slug?: string;
+  webhookUrl?: string | null;
 };
 
 export async function updateGuild(
@@ -356,6 +371,22 @@ export async function updateGuild(
     updates.slug = uniqueSlug;
   }
 
+  if (input.webhookUrl !== undefined) {
+    if (
+      input.webhookUrl !== null &&
+      typeof input.webhookUrl !== "string"
+    ) {
+      throw new Error("webhookUrl must be a string or null");
+    }
+    const trimmed = input.webhookUrl ?? null;
+    const normalized =
+      trimmed && typeof trimmed === "string" ? trimmed.trim() : null;
+    if (normalized && !normalized.startsWith("https://")) {
+      throw new Error("webhookUrl must be a HTTPS URL");
+    }
+    updates.discord_webhook_url = normalized && normalized.length > 0 ? normalized : null;
+  }
+
   if (Object.keys(updates).length === 0) {
     return existing;
   }
@@ -364,7 +395,7 @@ export async function updateGuild(
     .from("guilds")
     .update(updates)
     .eq("id", id)
-    .select("id,name,slug,owner_id,created_at")
+    .select("id,name,slug,owner_id,created_at,discord_webhook_url")
     .single();
 
   if (error || !data) {
@@ -377,6 +408,7 @@ export async function updateGuild(
     slug: data.slug,
     ownerId: data.owner_id,
     createdAt: data.created_at,
+    webhookUrl: data.discord_webhook_url ?? null,
   };
 }
 

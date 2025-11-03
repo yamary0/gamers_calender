@@ -61,6 +61,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 type UpdateGuildBody = {
   name?: unknown;
   slug?: unknown;
+  discordWebhookUrl?: unknown;
 };
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
@@ -90,7 +91,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const updates: { name?: string; slug?: string } = {};
+  const updates: { name?: string; slug?: string; webhookUrl?: string | null } = {};
 
   if (body.name !== undefined) {
     if (typeof body.name !== "string") {
@@ -110,6 +111,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
     updates.slug = body.slug;
+  }
+
+  if (body.discordWebhookUrl !== undefined) {
+    if (body.discordWebhookUrl !== null && typeof body.discordWebhookUrl !== "string") {
+      return NextResponse.json(
+        { error: "discordWebhookUrl must be a string or null." },
+        { status: 422 },
+      );
+    }
+    updates.webhookUrl =
+      body.discordWebhookUrl === null
+        ? null
+        : (body.discordWebhookUrl as string).trim();
   }
 
   if (Object.keys(updates).length === 0) {
@@ -136,7 +150,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const status =
       message === "Guild not found"
         ? 404
-        : message.includes("slug must") || message.includes("name must")
+        : message.includes("slug must") || message.includes("name must") || message.includes("webhookUrl")
           ? 422
           : 500;
     return NextResponse.json({ error: message }, { status });

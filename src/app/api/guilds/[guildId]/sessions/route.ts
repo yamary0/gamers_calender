@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import { getGuildById } from "@/services/guild-store";
 import {
   createSession,
   listSessions,
@@ -155,6 +156,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
+    const guild = await getGuildById(guildId);
+    if (!guild) {
+      return NextResponse.json({ error: "Guild not found." }, { status: 404 });
+    }
+
     const result = await createSession(
       {
         title,
@@ -165,9 +171,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       guildId,
     );
     if (result.activated) {
-      await sendDiscordNotification({
-        content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
-      });
+      await sendDiscordNotification(
+        {
+          content: `✅ **Session Ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers})`,
+        },
+        guild.webhookUrl,
+      );
     }
     return NextResponse.json({ data: result.session }, { status: 201 });
   } catch (error) {

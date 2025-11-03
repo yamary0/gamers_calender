@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { useGuilds } from "@/components/guild-provider";
 import { Button } from "@/components/ui/button";
+import {
+  ChevronDown,
+  Eye,
+  Plus,
+  Search,
+  UserRound,
+  UserRoundPlus,
+} from "lucide-react";
 
 export function GuildSwitcher() {
   const router = useRouter();
@@ -31,6 +39,7 @@ export function GuildSwitcher() {
   const [isJoinLoading, setIsJoinLoading] = useState(false);
   const [isJoinSubmitting, setIsJoinSubmitting] = useState(false);
   const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -40,6 +49,24 @@ export function GuildSwitcher() {
       setJoinResult(null);
       setJoinSlug("");
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, [isOpen]);
 
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -166,14 +193,21 @@ export function GuildSwitcher() {
         onClick={() => setIsOpen((current) => !current)}
         disabled={loading}
       >
+        <UserRound className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         <span className="rounded-full bg-background px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
           Guild
         </span>
-        <span>{selectedGuild ? selectedGuild.name : "None"}</span>
+        <span className="flex items-center gap-1">
+          {selectedGuild ? selectedGuild.name : "None"}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+        </span>
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 z-40 mt-2 w-72 rounded-md border border-border bg-popover p-3 text-sm shadow-lg">
+        <div
+          ref={popoverRef}
+          className="absolute right-0 z-40 mt-2 w-72 rounded-md border border-border bg-popover p-3 text-sm shadow-lg"
+        >
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Your guilds
@@ -183,8 +217,9 @@ export function GuildSwitcher() {
               variant="outline"
               size="sm"
               onClick={() => setNewGuildName("")}
-              className="px-2 py-1 text-[11px]"
+              className="flex items-center gap-1 px-2 py-1 text-[11px]"
             >
+              <Plus className="h-3 w-3" aria-hidden="true" />
               New
             </Button>
           </div>
@@ -226,8 +261,9 @@ export function GuildSwitcher() {
                           setIsOpen(false);
                           router.push(`/g/${guild.slug}`);
                         }}
-                        className="px-2 text-[11px]"
+                        className="flex items-center gap-1 px-2 text-[11px]"
                       >
+                        <Eye className="h-3 w-3" aria-hidden="true" />
                         View
                       </Button>
                     </div>
@@ -278,7 +314,13 @@ export function GuildSwitcher() {
               disabled={isJoinLoading || isJoinSubmitting}
             />
             <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" disabled={isJoinLoading || isJoinSubmitting}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isJoinLoading || isJoinSubmitting}
+                className="flex items-center gap-1"
+              >
+                <Search className="h-3 w-3" aria-hidden="true" />
                 {isJoinLoading ? "Searching…" : "Search"}
               </Button>
               <Button
@@ -292,6 +334,7 @@ export function GuildSwitcher() {
                   setJoinError(null);
                   setJoinMessage(null);
                 }}
+                className="text-[11px]"
               >
                 Clear
               </Button>
@@ -308,8 +351,10 @@ export function GuildSwitcher() {
                     type="button"
                     size="sm"
                     disabled={isJoinSubmitting}
+                    className="flex items-center gap-1"
                     onClick={() => void handleJoin()}
                   >
+                    <UserRoundPlus className="h-3 w-3" aria-hidden="true" />
                     {isJoinSubmitting ? "Joining…" : "Join"}
                   </Button>
                 </div>

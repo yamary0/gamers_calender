@@ -8,6 +8,7 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { format } from "date-fns";
 import { useAuth } from "@/components/auth-provider";
 import { useGuilds } from "@/components/guild-provider";
@@ -19,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type GuildScreenProps = {
   slug: string;
@@ -31,6 +33,7 @@ type GuildMember = {
   joinedAt: string;
   displayName: string | null;
   provider: string | null;
+  avatarUrl: string | null;
 };
 
 type GuildDetailPayload = {
@@ -526,24 +529,45 @@ const [isMutating, startMutation] = useTransition();
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-background">
-                  {members.map((member) => (
-                    <tr key={`${member.guildId}-${member.userId}`}>
-                      <td className="px-4 py-2">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">
-                            {member.displayName ?? "Unknown player"}
-                          </span>
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {member.userId}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 capitalize">{member.role}</td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {format(new Date(member.joinedAt), "yyyy-MM-dd HH:mm")}
-                      </td>
-                    </tr>
-                  ))}
+                  {members.map((member) => {
+                    const label = member.displayName ?? "Unknown player";
+                    const fallbackInitial = label.charAt(0).toUpperCase();
+                    return (
+                      <tr key={`${member.guildId}-${member.userId}`}>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex size-8 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-semibold uppercase text-secondary-foreground">
+                              {member.avatarUrl ? (
+                                <Image
+                                  src={member.avatarUrl}
+                                  alt={`${label} avatar`}
+                                  fill
+                                  sizes="32px"
+                                  className="object-cover"
+                                  loading="lazy"
+                                  unoptimized
+                                />
+                              ) : (
+                                <span>{fallbackInitial}</span>
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-foreground">
+                                {label}
+                              </span>
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {member.userId}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 capitalize">{member.role}</td>
+                        <td className="px-4 py-2 text-muted-foreground">
+                          {format(new Date(member.joinedAt), "yyyy-MM-dd HH:mm")}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -601,59 +625,83 @@ const [isMutating, startMutation] = useTransition();
                 <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Notification events
                 </legend>
-                <div className="flex flex-col gap-2 text-xs">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                <div className="flex flex-col gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="guild-notify-create"
                       checked={notificationSettings.onSessionCreate}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         setNotificationSettings((prev) => ({
                           ...prev,
-                          onSessionCreate: event.target.checked,
+                          onSessionCreate: checked,
                         }))
                       }
+                      disabled={isMutating}
                     />
-                    Session created
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <label
+                      htmlFor="guild-notify-create"
+                      className="cursor-pointer select-none text-muted-foreground"
+                    >
+                      Session created
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="guild-notify-join"
                       checked={notificationSettings.onSessionJoin}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         setNotificationSettings((prev) => ({
                           ...prev,
-                          onSessionJoin: event.target.checked,
+                          onSessionJoin: checked,
                         }))
                       }
+                      disabled={isMutating}
                     />
-                    Participant joined
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <label
+                      htmlFor="guild-notify-join"
+                      className="cursor-pointer select-none text-muted-foreground"
+                    >
+                      Participant joined
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="guild-notify-active"
                       checked={notificationSettings.onSessionActivate}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         setNotificationSettings((prev) => ({
                           ...prev,
-                          onSessionActivate: event.target.checked,
+                          onSessionActivate: checked,
                         }))
                       }
+                      disabled={isMutating}
                     />
-                    Session becomes active
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <label
+                      htmlFor="guild-notify-active"
+                      className="cursor-pointer select-none text-muted-foreground"
+                    >
+                      Session becomes active
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="guild-notify-start"
                       checked={notificationSettings.onSessionStart}
-                      onChange={(event) =>
+                      onCheckedChange={(checked) =>
                         setNotificationSettings((prev) => ({
                           ...prev,
-                          onSessionStart: event.target.checked,
+                          onSessionStart: checked,
                         }))
                       }
+                      disabled={isMutating}
                     />
-                    When the session starts
-                  </label>
+                    <label
+                      htmlFor="guild-notify-start"
+                      className="cursor-pointer select-none text-muted-foreground"
+                    >
+                      When the session starts
+                    </label>
+                  </div>
                 </div>
               </fieldset>
               <div className="flex items-center gap-3">

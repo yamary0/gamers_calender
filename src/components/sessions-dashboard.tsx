@@ -564,7 +564,7 @@ export function SessionsDashboard({
                   return (
                     <li
                       key={session.id}
-                      className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 px-4 py-3"
+                      className="flex flex-col gap-3 rounded-xl border border-[#1f2747] bg-[#141c35]/90 px-4 py-4 shadow-[0_25px_80px_-60px_rgba(88,101,242,0.7)] backdrop-blur-sm"
                     >
                       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>

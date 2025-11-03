@@ -30,6 +30,7 @@ export type GuildNotificationSettings = {
 export type GuildMemberDetail = GuildMembership & {
   displayName: string | null;
   provider: string | null;
+  avatarUrl: string | null;
 };
 
 export type GuildWithRole = Guild & { role: GuildRole };
@@ -307,6 +308,7 @@ export async function ensureGuildMembership(
 type MemberProfile = {
   displayName: string | null;
   provider: string | null;
+  avatarUrl: string | null;
 };
 
 async function loadMemberProfiles(
@@ -334,6 +336,13 @@ async function loadMemberProfiles(
                 ? metadata.user_name
                 : null;
 
+        const avatarUrl =
+          typeof metadata.avatar_url === "string"
+            ? metadata.avatar_url
+            : typeof metadata.picture === "string"
+              ? metadata.picture
+              : null;
+
         const provider =
           typeof user.app_metadata?.provider === "string"
             ? (user.app_metadata.provider as string)
@@ -349,6 +358,7 @@ async function loadMemberProfiles(
         profiles.set(userId, {
           displayName,
           provider,
+          avatarUrl,
         });
       } catch {
         // ignore individual failures
@@ -385,6 +395,7 @@ export async function listGuildMembers(
       joinedAt: row.joined_at,
       displayName: profile?.displayName ?? null,
       provider: profile?.provider ?? null,
+      avatarUrl: profile?.avatarUrl ?? null,
     };
   });
 }

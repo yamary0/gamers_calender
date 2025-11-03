@@ -1,32 +1,37 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+
+const matchesQuery = (query: string): boolean => {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+  return window.matchMedia(query).matches;
+};
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
+  const subscribe = useCallback(
+    (callback: () => void) => {
+      if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        return () => {};
+      }
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
-    }
+      const mediaQuery = window.matchMedia(query);
+      const handler = () => callback();
 
-    const mediaQuery = window.matchMedia(query);
+      if (typeof mediaQuery.addEventListener === "function") {
+        mediaQuery.addEventListener("change", handler);
+        return () => mediaQuery.removeEventListener("change", handler);
+      }
 
-    const handleChange = () => {
-      setMatches(mediaQuery.matches);
-    };
+      mediaQuery.addListener(handler);
+      return () => mediaQuery.removeListener(handler);
+    },
+    [query],
+  );
 
-    // Set initial value
-    setMatches(mediaQuery.matches);
+  const getSnapshot = useCallback(() => matchesQuery(query), [query]);
+  const getServerSnapshot = useCallback(() => false, []);
 
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
-
-    mediaQuery.addListener(handleChange);
-    return () => mediaQuery.removeListener(handleChange);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

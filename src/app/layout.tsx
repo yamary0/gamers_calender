@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { GuildProvider } from "@/components/guild-provider";
 import { GuildSwitcher } from "@/components/guild-switcher";
 import { UserMenu } from "@/components/user-menu";
+import { Button } from "@/components/ui/button";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,13 +60,20 @@ export default function RootLayout({
               </main>
 
               <footer className="border-t border-[#1a2341] bg-[#070d19] text-slate-200">
-                <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-medium text-foreground/70">
-                    © {new Date().getFullYear()} Aligna.
-                  </span>
-                  <span className="text-foreground/50">
-                    「誘われたら行きたい」を叶える仲間づくりプラットフォーム。
-                  </span>
+                <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium text-foreground/70">
+                      © {new Date().getFullYear()} Aligna.
+                    </span>
+                    <span className="text-foreground/50">
+                      「誘われたら行きたい」を叶える仲間づくりプラットフォーム。
+                    </span>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button asChild variant="outline" size="lg">
+                      <Link href="/landing">戻る</Link>
+                    </Button>
+                  </div>
                 </div>
               </footer>
             </div>

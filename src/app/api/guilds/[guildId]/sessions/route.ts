@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
 import { scheduleSessionStartNotification } from "@/lib/session-notifier";
 import { getGuildById } from "@/services/guild-store";
 import {
@@ -178,10 +179,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       guildId,
     );
 
+    const baseUrl = resolveBaseUrl(request);
+    const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
+    const formatMessage = (message: string) =>
+      sessionUrl ? `${message}\n🔗 ${sessionUrl}` : message;
+
     if (guild.notificationSettings.onSessionCreate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `🆕 **New session:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}) created by ${creatorName}.`,
+          content: formatMessage(
+            `🆕 **New session:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}) created by ${creatorName}.`,
+          ),
         },
         guild.webhookUrl,
       );
@@ -190,7 +198,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          content: formatMessage(
+            `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          ),
         },
         guild.webhookUrl,
       );
@@ -201,6 +211,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,
+      sessionUrl,
     });
 
     return NextResponse.json({ data: result.session }, { status: 201 });

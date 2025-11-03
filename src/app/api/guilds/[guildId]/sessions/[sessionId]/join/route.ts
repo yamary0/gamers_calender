@@ -4,6 +4,7 @@ import { getUserFromRequest } from "@/lib/auth-server";
 import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import { joinSession, leaveSession, getSession } from "@/services/session-store";
 import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
 import { scheduleSessionStartNotification } from "@/lib/session-notifier";
 
 type RouteContext = {
@@ -47,10 +48,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       user.email ??
       user.id;
 
+    const baseUrl = resolveBaseUrl(request);
+    const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
+    const formatMessage = (message: string) =>
+      sessionUrl ? `${message}\n🔗 ${sessionUrl}` : message;
+
     if (guild.notificationSettings.onSessionJoin && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `👥 **${participantName} joined:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          content: formatMessage(
+            `👥 **${participantName} joined:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          ),
         },
         guild.webhookUrl,
       );
@@ -59,7 +67,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          content: formatMessage(
+            `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          ),
         },
         guild.webhookUrl,
       );
@@ -70,6 +80,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,
+      sessionUrl,
     });
 
     return NextResponse.json({ data: result.session });
@@ -126,11 +137,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     const result = await leaveSession(sessionId, user.id, guildId);
 
+    const baseUrl = resolveBaseUrl(request);
+    const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
+
     scheduleSessionStartNotification({
       guildId,
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,
+      sessionUrl,
     });
 
     return NextResponse.json({ data: result.session });

@@ -10,6 +10,7 @@ import {
 import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
 import {
   scheduleSessionStartNotification,
   cancelSessionStartNotification,
@@ -193,10 +194,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const result = await updateSession(sessionId, updates, guildId);
 
+    const baseUrl = resolveBaseUrl(request);
+    const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
+    const formatMessage = (message: string) =>
+      sessionUrl ? `${message}\n🔗 ${sessionUrl}` : message;
+
     if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
         {
-          content: `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          content: formatMessage(
+            `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
+          ),
         },
         guild.webhookUrl,
       );
@@ -207,6 +215,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,
+      sessionUrl,
     });
 
     return NextResponse.json({ data: result.session });

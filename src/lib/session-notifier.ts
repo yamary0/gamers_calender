@@ -13,6 +13,7 @@ type ScheduleConfig = {
   session: Session;
   webhookUrl: string | null;
   settings: GuildNotificationSettings;
+  sessionUrl?: string | null;
 };
 
 type CancelConfig = {
@@ -36,6 +37,7 @@ export function scheduleSessionStartNotification({
   session,
   webhookUrl,
   settings,
+  sessionUrl,
 }: ScheduleConfig) {
   const key = sessionKey(guildId, session.id);
 
@@ -54,11 +56,15 @@ export function scheduleSessionStartNotification({
     return;
   }
 
+  const content = sessionUrl
+    ? `🕒 **Session starting:** ${session.title} is beginning now.\n🔗 ${sessionUrl}`
+    : `🕒 **Session starting:** ${session.title} is beginning now.`;
+
   const delay = startDate.getTime() - Date.now();
   if (delay <= 0) {
     void sendDiscordNotification(
       {
-        content: `🕒 **Session starting:** ${session.title} is beginning now.`,
+        content,
       },
       webhookUrl,
     );
@@ -73,7 +79,7 @@ export function scheduleSessionStartNotification({
   const timeout = setTimeout(() => {
     void sendDiscordNotification(
       {
-        content: `🕒 **Session starting:** ${session.title} is beginning now.`,
+        content,
       },
       webhookUrl,
     ).finally(() => {

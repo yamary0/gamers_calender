@@ -149,8 +149,7 @@ export function GuildSwitcher() {
 
       await refreshGuilds();
       selectGuild(payload.data.guild.id);
-      router.push(`/g/${payload.data.guild.slug}`);
-      setIsOpen(false);
+      setJoinMessage("Joined successfully. Use View to open the guild.");
     } catch (joinErr) {
       setJoinError(joinErr instanceof Error ? joinErr.message : "Failed to join guild");
     } finally {
@@ -198,24 +197,40 @@ export function GuildSwitcher() {
               <ul className="space-y-1">
                 {guilds.map((guild) => (
                   <li key={guild.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectGuild(guild.id);
-                        setIsOpen(false);
-                        router.push(`/g/${guild.slug}`);
-                      }}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-xs transition hover:border-primary hover:text-primary ${
+                    <div
+                      className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs transition ${
                         selectedGuildId === guild.id
                           ? "border-primary/60 bg-primary/5"
                           : "border-border bg-background"
                       }`}
                     >
-                      <span className="font-medium text-foreground">{guild.name}</span>
-                      <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {guild.role}
-                      </span>
-                    </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="flex-1 justify-start px-0 text-left hover:bg-transparent"
+                        onClick={() => {
+                          selectGuild(guild.id);
+                          setIsOpen(false);
+                        }}
+                      >
+                        <span className="font-medium text-foreground">{guild.name}</span>
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {guild.role}
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setIsOpen(false);
+                          router.push(`/g/${guild.slug}`);
+                        }}
+                        className="px-2 text-[11px]"
+                      >
+                        View
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

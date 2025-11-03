@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -83,11 +83,120 @@ const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function SessionsCalendar({ sessions, onCreateSession }: Props) {
   const [activeDate, setActiveDate] = useState(() => new Date());
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobile(event.matches);
+    };
+    handleChange(mediaQuery);
+    const listener = (event: MediaQueryListEvent) => handleChange(event);
+    mediaQuery.addEventListener("change", listener);
+    return () => {
+      mediaQuery.removeEventListener("change", listener);
+    };
+  }, []);
 
   const calendar = useMemo(
     () => buildCalendarMatrix(activeDate, sessions),
     [activeDate, sessions],
   );
+
+  const mobileAgenda = useMemo(() => {
+    const sorted = [...sessions].sort(
+      (a, b) => sessionReferenceDate(a).getTime() - sessionReferenceDate(b).getTime(),
+    );
+    const groups = new Map<string, Session[]>();
+    sorted.forEach((session) => {
+      const key = format(sessionReferenceDate(session), "yyyy-MM-dd");
+      const list = groups.get(key) ?? [];
+      list.push(session);
+      groups.set(key, list);
+    });
+    return Array.from(groups.entries())
+      .map(([date, items]) => ({
+        date,
+        label: format(parseISO(date), "MMM d (EEE)"),
+        sessions: items,
+      }))
+      .slice(0, 30);
+  }, [sessions]);
+
+  if (isMobile) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-semibold">Upcoming sessions</CardTitle>
+            {onCreateSession && (
+              <Button type="button" size="sm" onClick={onCreateSession}>
+                + Session
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Mobile view shows an agenda-style list. Switch to a larger screen for full calendar.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {mobileAgenda.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No sessions scheduled yet. Create one to get started.
+            </p>
+          ) : (
+            mobileAgenda.map((group) => (
+              <div key={group.date} className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.label}
+                </p>
+                <ul className="space-y-2">
+                  {group.sessions.map((session) => {
+                    const scheduleLabel = (() => {
+                      switch (session.schedule.kind) {
+                        case "all-day":
+                          return "All day";
+                        case "timed":
+                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${
+                            session.schedule.endAt
+                              ? ` – ${format(parseISO(session.schedule.endAt), "HH:mm")}`
+                              : ""
+                          }`;
+                        default:
+                          return "No schedule";
+                      }
+                    })();
+                    return (
+                      <li key={session.id}>
+                        <Link
+                          href={`/sessions/${session.id}`}
+                          className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs shadow-sm transition hover:border-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        >
+                          <span className="text-sm font-semibold text-foreground">
+                            {session.title}
+                          </span>
+                          <span>
+                            {session.participants.length}/{session.maxPlayers} players ·{" "}
+                            {scheduleLabel}
+                          </span>
+                          <span className="uppercase tracking-wide text-[10px] text-muted-foreground">
+                            {session.status}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

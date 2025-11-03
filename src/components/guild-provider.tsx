@@ -121,16 +121,9 @@ export function GuildProvider({ children }: GuildProviderProps) {
     await loadGuilds();
   }, [loadGuilds]);
 
-  const selectGuild = useCallback(
-    (guildId: string) => {
-      setSelectedGuildId(guildId);
-      const guild = guilds.find((item) => item.id === guildId);
-      if (guild && !pathname.startsWith(`/g/${guild.slug}`)) {
-        router.push(`/g/${guild.slug}`);
-      }
-    },
-    [guilds, pathname, router],
-  );
+  const selectGuild = useCallback((guildId: string) => {
+    setSelectedGuildId(guildId);
+  }, []);
 
   const createGuild = useCallback(
     async (name: string) => {

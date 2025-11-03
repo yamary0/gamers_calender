@@ -388,6 +388,35 @@ export async function deleteGuild(id: string): Promise<void> {
   }
 }
 
+export async function joinGuild(
+  guildId: string,
+  userId: string,
+): Promise<GuildMembership> {
+  const supabase = admin();
+  const existing = await ensureGuildMembership(guildId, userId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const { error } = await supabase.from("guild_members").insert({
+    guild_id: guildId,
+    user_id: userId,
+    role: "member",
+  });
+
+  if (error && error.code !== "23505") {
+    throw new Error(`Failed to join guild: ${error.message}`);
+  }
+
+  const membership = await ensureGuildMembership(guildId, userId);
+  if (!membership) {
+    throw new Error("Failed to confirm guild membership.");
+  }
+
+  return membership;
+}
+
 export async function createGuildInvitation(
   guildId: string,
   createdBy: string,

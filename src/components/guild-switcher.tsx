@@ -1,41 +1,160 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { useGuilds } from "@/components/guild-provider";
 import { Button } from "@/components/ui/button";
 
 export function GuildSwitcher() {
   const router = useRouter();
+  const { session } = useAuth();
+  const accessToken = session?.access_token ?? null;
   const {
     guilds,
     selectedGuildId,
     selectGuild,
     createGuild,
+    refreshGuilds,
     loading,
   } = useGuilds();
   const [isOpen, setIsOpen] = useState(false);
   const [newGuildName, setNewGuildName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [joinSlug, setJoinSlug] = useState("");
+  const [joinResult, setJoinResult] = useState<{ id: string; name: string; slug: string } | null>(
+    null,
+  );
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [isJoinLoading, setIsJoinLoading] = useState(false);
+  const [isJoinSubmitting, setIsJoinSubmitting] = useState(false);
   const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCreateError(null);
+      setJoinError(null);
+      setJoinMessage(null);
+      setJoinResult(null);
+      setJoinSlug("");
+    }
+  }, [isOpen]);
 
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newGuildName.trim()) {
-      setError("Name is required");
+      setCreateError("Name is required");
       return;
     }
     setIsSubmitting(true);
-    setError(null);
+    setCreateError(null);
     try {
       await createGuild(newGuildName.trim());
       setNewGuildName("");
       setIsOpen(false);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Failed to create guild");
+      setCreateError(
+        createError instanceof Error ? createError.message : "Failed to create guild",
+      );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSearch: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+    if (!accessToken) {
+      setJoinError("Sign in required.");
+      return;
+    }
+
+    const trimmed = joinSlug.trim();
+    if (!trimmed) {
+      setJoinError("Guild slug is required");
+      setJoinResult(null);
+      setJoinMessage(null);
+      return;
+    }
+
+    setJoinError(null);
+    setJoinMessage(null);
+    setJoinResult(null);
+    setIsJoinLoading(true);
+
+    try {
+      const response = await fetch(`/api/guilds/search?slug=${encodeURIComponent(trimmed)}`, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        data: { guild: { id: string; name: string; slug: string }; alreadyMember: boolean };
+      };
+
+      setJoinResult(payload.data.guild);
+      setJoinMessage(
+        payload.data.alreadyMember
+          ? "You are already a member of this guild."
+          : "Guild found. Join to add it to your list.",
+      );
+    } catch (searchError) {
+      setJoinError(
+        searchError instanceof Error ? searchError.message : "Failed to find guild",
+      );
+    } finally {
+      setIsJoinLoading(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    if (!joinResult) {
+      setJoinError("Search for a guild first.");
+      return;
+    }
+
+    setJoinError(null);
+    setJoinMessage(null);
+    setIsJoinSubmitting(true);
+
+    if (!accessToken) {
+      setJoinError("Sign in required.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/guilds/${joinResult.id}/join`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        data: { guild: { id: string; name: string; slug: string } };
+      };
+
+      await refreshGuilds();
+      selectGuild(payload.data.guild.id);
+      router.push(`/g/${payload.data.guild.slug}`);
+      setIsOpen(false);
+    } catch (joinErr) {
+      setJoinError(joinErr instanceof Error ? joinErr.message : "Failed to join guild");
+    } finally {
+      setIsJoinSubmitting(false);
     }
   };
 
@@ -115,10 +234,73 @@ export function GuildSwitcher() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               disabled={isSubmitting}
             />
-            {error && <p className="text-[11px] text-destructive">{error}</p>}
+            {createError && <p className="text-[11px] text-destructive">{createError}</p>}
             <Button type="submit" size="sm" className="w-full" disabled={isSubmitting}>
               Create guild
             </Button>
+          </form>
+          <form
+            className="mt-4 space-y-2 border-t border-dashed border-border pt-3"
+            onSubmit={handleSearch}
+          >
+            <label
+              className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+              htmlFor="join-guild-slug"
+            >
+              Join by guild slug
+            </label>
+            <input
+              id="join-guild-slug"
+              type="text"
+              placeholder="guild-name-123"
+              value={joinSlug}
+              onChange={(event) => {
+                setJoinSlug(event.target.value);
+                setJoinError(null);
+                setJoinMessage(null);
+              }}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              disabled={isJoinLoading || isJoinSubmitting}
+            />
+            <div className="flex items-center gap-2">
+              <Button type="submit" size="sm" disabled={isJoinLoading || isJoinSubmitting}>
+                {isJoinLoading ? "Searching…" : "Search"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={isJoinLoading || isJoinSubmitting}
+                onClick={() => {
+                  setJoinSlug("");
+                  setJoinResult(null);
+                  setJoinError(null);
+                  setJoinMessage(null);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+            {joinError && <p className="text-[11px] text-destructive">{joinError}</p>}
+            {joinResult && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-foreground">{joinResult.name}</p>
+                    <p className="font-mono text-[11px] text-muted-foreground">{joinResult.slug}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isJoinSubmitting}
+                    onClick={() => void handleJoin()}
+                  >
+                    {isJoinSubmitting ? "Joining…" : "Join"}
+                  </Button>
+                </div>
+                {joinMessage && <p className="text-[11px] text-muted-foreground">{joinMessage}</p>}
+              </div>
+            )}
           </form>
         </div>
       )}

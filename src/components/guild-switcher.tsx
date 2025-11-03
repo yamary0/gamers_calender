@@ -206,7 +206,7 @@ export function GuildSwitcher() {
       {isOpen && (
         <div
           ref={popoverRef}
-          className="absolute right-0 z-40 mt-2 w-72 rounded-md border border-border bg-popover p-3 text-sm shadow-lg"
+          className="absolute left-1/2 z-40 mt-2 w-72 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 rounded-md border border-border bg-popover p-3 text-sm shadow-lg sm:left-auto sm:right-0 sm:max-w-none sm:translate-x-0"
         >
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

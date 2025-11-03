@@ -13,8 +13,8 @@ export async function generateMetadata({
 }: GuildPageProps): Promise<Metadata> {
   const { slug } = await params;
   return {
-    title: `${slug} · Gamers Calendar`,
-    description: "Guild workspace view.",
+    title: `${slug} · Aligna`,
+    description: "ギルド向けのセッション管理ビュー。",
   };
 }
 

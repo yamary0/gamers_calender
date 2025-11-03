@@ -1,9 +1,5 @@
 import { headers } from "next/headers";
-import { SessionsDashboard } from "@/components/sessions-dashboard";
-
-type PingPayload =
-  | { pong: true; timestamp?: string }
-  | { pong: false; error: string };
+import { HomeScreen, type PingPayload } from "@/components/home-screen";
 
 async function fetchPing(): Promise<PingPayload> {
   const incomingHeaders = await headers();
@@ -44,34 +40,5 @@ async function fetchPing(): Promise<PingPayload> {
 export default async function Home() {
   const ping = await fetchPing();
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
-  const pingErrorMessage = !ping.pong ? ping.error : null;
-
-  return (
-    <div className="w-full space-y-8">
-
-      <SessionsDashboard initialSessions={[]} />
-
-      <div className="border-t border-dashed border-border pt-4 text-xs text-muted-foreground">
-        <p className="font-mono">
-          Version {appVersion}
-        </p>
-        <p>
-          Ping:{" "}
-          {ping.pong ? (
-            <>
-              Reachable
-              {ping.timestamp ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {ping.timestamp}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="text-destructive">{pingErrorMessage}</span>
-          )}
-        </p>
-      </div>
-    </div>
-  );
+  return <HomeScreen ping={ping} appVersion={appVersion} />;
 }

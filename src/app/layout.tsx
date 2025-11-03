@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gamers Calendar",
-  description: "Coordinate multiplayer sessions without friction.",
+  title: "Aligna",
+  description: "気軽に集まりたいプレイヤー同士を結びつけるコミュニティハブ。",
 };
 
 export default function RootLayout({
@@ -42,7 +42,7 @@ export default function RootLayout({
                     href="/"
                     className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
-                    Gamers Calendar
+                    Aligna
                   </Link>
                   <div className="flex items-center gap-3 rounded-full bg-[#111a2f]/60 px-3 py-2 backdrop-blur">
                     <GuildSwitcher />
@@ -61,10 +61,10 @@ export default function RootLayout({
               <footer className="border-t border-[#1a2341] bg-[#070d19] text-slate-200">
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-1 px-6 py-4 text-xs sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-medium text-foreground/70">
-                    © {new Date().getFullYear()} Gamers Calendar.
+                    © {new Date().getFullYear()} Aligna.
                   </span>
                   <span className="text-foreground/50">
-                    Phase-based local development build.
+                    「誘われたら行きたい」を叶える仲間づくりプラットフォーム。
                   </span>
                 </div>
               </footer>

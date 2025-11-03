@@ -22,6 +22,7 @@ import {
 } from "@/lib/schedule-utils";
 import { useGuilds } from "@/components/guild-provider";
 import type { Session } from "@/services/session-store";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 type SessionsDashboardProps = {
   initialSessions: Session[];
@@ -53,6 +54,13 @@ export function SessionsDashboard({
   const hasGuild = Boolean(selectedGuildId);
   const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
   const userId = user?.id ?? null;
+  const isTabletUp = useMediaQuery("(min-width: 768px)");
+
+  useEffect(() => {
+    if (!isTabletUp) {
+      setActiveView("feed");
+    }
+  }, [isTabletUp]);
   async function refreshSessions() {
     if (!canMutate || !selectedGuildId) {
       setSessions([]);
@@ -283,32 +291,34 @@ export function SessionsDashboard({
       {formError && <ErrorToast message={formError} />}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div
-          role="tablist"
-          aria-label="Session view"
-          className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
-        >
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeView === "feed"}
-            variant={activeView === "feed" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveView("feed")}
+        {isTabletUp && (
+          <div
+            role="tablist"
+            aria-label="Session view"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1"
           >
-            Feed
-          </Button>
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={activeView === "calendar"}
-            variant={activeView === "calendar" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveView("calendar")}
-          >
-            Calendar
-          </Button>
-        </div>
+            <Button
+              type="button"
+              role="tab"
+              aria-selected={activeView === "feed"}
+              variant={activeView === "feed" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveView("feed")}
+            >
+              Feed
+            </Button>
+            <Button
+              type="button"
+              role="tab"
+              aria-selected={activeView === "calendar"}
+              variant={activeView === "calendar" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveView("calendar")}
+            >
+              Calendar
+            </Button>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {guildLoading ? (
             <span>Loading guilds…</span>
@@ -489,7 +499,7 @@ export function SessionsDashboard({
       )}
 
       <div className="space-y-4">
-        {activeView === "calendar" ? (
+        {isTabletUp && activeView === "calendar" ? (
           <SessionsCalendar
             sessions={calendarSessions}
             onCreateSession={canMutate && hasGuild ? openCreateForm : undefined}

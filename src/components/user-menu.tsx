@@ -229,10 +229,7 @@ export function UserMenu({ trigger, side = "bottom" }: { trigger?: React.ReactNo
                     </div>
                     <div className="flex flex-col">
                       <span className="font-medium text-foreground text-base md:text-sm">
-                        {user.email ?? user.id}
-                      </span>
-                      <span className="text-xs font-mono text-muted-foreground md:text-[11px]">
-                        {user.id}
+                        {displayName}
                       </span>
                     </div>
                   </div>

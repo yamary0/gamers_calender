@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export function SessionsDashboard({
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
+  const router = useRouter();
 
   const { session, user } = useAuth();
   const {
@@ -199,12 +201,15 @@ export function SessionsDashboard({
 
       {/* Active Guild Indicator */}
       {selectedGuild && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <button
+          onClick={() => router.push(`/g/${selectedGuild.slug}`)}
+          className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
             {selectedGuild.name.charAt(0).toUpperCase()}
           </div>
           <span className="font-medium text-foreground">{selectedGuild.name}</span>
-        </div>
+        </button>
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

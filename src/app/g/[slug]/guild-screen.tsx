@@ -23,6 +23,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 
 type GuildScreenProps = {
   slug: string;
@@ -88,6 +90,7 @@ export function GuildScreen({ slug }: GuildScreenProps) {
     ...defaultNotificationState,
   });
   const [isMutating, startMutation] = useTransition();
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
 
   const guild = useMemo(
     () => guilds.find((item) => item.slug === slug) ?? null,
@@ -537,160 +540,172 @@ export function GuildScreen({ slug }: GuildScreenProps) {
       </Card>
 
       {isOwner && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Admin actions</CardTitle>
-            <CardDescription>Rename or remove the guild.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form className="space-y-3" onSubmit={handleUpdate}>
-              <div className="space-y-2">
-                <Label htmlFor="guild-edit-name">Guild name</Label>
-                <Input
-                  id="guild-edit-name"
-                  type="text"
-                  value={editName}
-                  onChange={(event) => setEditName(event.target.value)}
-                  minLength={3}
-                  maxLength={120}
-                  disabled={isMutating}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="guild-edit-webhook">Discord webhook URL</Label>
-                <Input
-                  id="guild-edit-webhook"
-                  type="url"
-                  value={editWebhook}
-                  onChange={(event) => setEditWebhook(event.target.value)}
-                  placeholder="https://discord.com/api/webhooks/..."
-                  disabled={isMutating}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to disable notifications for this guild.
-                </p>
-              </div>
-              <fieldset className="space-y-2">
-                <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Notification events
-                </legend>
-                <div className="flex flex-col gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="guild-notify-create"
-                      checked={notificationSettings.onSessionCreate}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          onSessionCreate: checked,
-                        }))
-                      }
-                      disabled={isMutating}
-                    />
-                    <label
-                      htmlFor="guild-notify-create"
-                      className="cursor-pointer select-none text-muted-foreground"
-                    >
-                      Session created
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="guild-notify-join"
-                      checked={notificationSettings.onSessionJoin}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          onSessionJoin: checked,
-                        }))
-                      }
-                      disabled={isMutating}
-                    />
-                    <label
-                      htmlFor="guild-notify-join"
-                      className="cursor-pointer select-none text-muted-foreground"
-                    >
-                      Participant joined
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="guild-notify-active"
-                      checked={notificationSettings.onSessionActivate}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          onSessionActivate: checked,
-                        }))
-                      }
-                      disabled={isMutating}
-                    />
-                    <label
-                      htmlFor="guild-notify-active"
-                      className="cursor-pointer select-none text-muted-foreground"
-                    >
-                      Session becomes active
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="guild-notify-start"
-                      checked={notificationSettings.onSessionStart}
-                      onCheckedChange={(checked) =>
-                        setNotificationSettings((prev) => ({
-                          ...prev,
-                          onSessionStart: checked,
-                        }))
-                      }
-                      disabled={isMutating}
-                    />
-                    <label
-                      htmlFor="guild-notify-start"
-                      className="cursor-pointer select-none text-muted-foreground"
-                    >
-                      When the session starts
-                    </label>
-                  </div>
+        <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
+          <Card>
+            <CardHeader>
+              <CollapsibleTrigger className="flex w-full items-center justify-between text-left hover:opacity-80">
+                <div>
+                  <CardTitle className="text-base">Guild Settings</CardTitle>
+                  <CardDescription>Manage guild name, notifications, and danger zone</CardDescription>
                 </div>
-              </fieldset>
-              <div className="flex items-center gap-3">
-                <Button type="submit" disabled={isMutating}>
-                  Save changes
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={isMutating}
-                  onClick={() => {
-                    setEditName(detail?.guild.name ?? guild.name);
-                    setEditWebhook(detail?.guild.webhookUrl ?? "");
-                    setNotificationSettings(
-                      detail?.guild.notificationSettings ?? { ...defaultNotificationState },
-                    );
-                  }}
-                >
-                  Reset
-                </Button>
-              </div>
-            </form>
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
-              <p className="font-semibold text-destructive">Danger zone</p>
-              <p className="mt-2 text-muted-foreground">
-                Deleting a guild removes all sessions and invitations. This action cannot be
-                undone.
-              </p>
-              <Button
-                type="button"
-                variant="destructive"
-                className="mt-3"
-                disabled={isMutating}
-                onClick={handleDelete}
-              >
-                Delete guild
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${isAdminOpen ? "rotate-180" : ""
+                    }`}
+                />
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="space-y-6">
+                <form className="space-y-3" onSubmit={handleUpdate}>
+                  <div className="space-y-2">
+                    <Label htmlFor="guild-edit-name">Guild name</Label>
+                    <Input
+                      id="guild-edit-name"
+                      type="text"
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      minLength={3}
+                      maxLength={120}
+                      disabled={isMutating}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="guild-edit-webhook">Discord webhook URL</Label>
+                    <Input
+                      id="guild-edit-webhook"
+                      type="url"
+                      value={editWebhook}
+                      onChange={(event) => setEditWebhook(event.target.value)}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      disabled={isMutating}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank to disable notifications for this guild.
+                    </p>
+                  </div>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Notification events
+                    </legend>
+                    <div className="flex flex-col gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="guild-notify-create"
+                          checked={notificationSettings.onSessionCreate}
+                          onCheckedChange={(checked) =>
+                            setNotificationSettings((prev) => ({
+                              ...prev,
+                              onSessionCreate: checked,
+                            }))
+                          }
+                          disabled={isMutating}
+                        />
+                        <label
+                          htmlFor="guild-notify-create"
+                          className="cursor-pointer select-none text-muted-foreground"
+                        >
+                          Session created
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="guild-notify-join"
+                          checked={notificationSettings.onSessionJoin}
+                          onCheckedChange={(checked) =>
+                            setNotificationSettings((prev) => ({
+                              ...prev,
+                              onSessionJoin: checked,
+                            }))
+                          }
+                          disabled={isMutating}
+                        />
+                        <label
+                          htmlFor="guild-notify-join"
+                          className="cursor-pointer select-none text-muted-foreground"
+                        >
+                          Participant joined
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="guild-notify-active"
+                          checked={notificationSettings.onSessionActivate}
+                          onCheckedChange={(checked) =>
+                            setNotificationSettings((prev) => ({
+                              ...prev,
+                              onSessionActivate: checked,
+                            }))
+                          }
+                          disabled={isMutating}
+                        />
+                        <label
+                          htmlFor="guild-notify-active"
+                          className="cursor-pointer select-none text-muted-foreground"
+                        >
+                          Session becomes active
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="guild-notify-start"
+                          checked={notificationSettings.onSessionStart}
+                          onCheckedChange={(checked) =>
+                            setNotificationSettings((prev) => ({
+                              ...prev,
+                              onSessionStart: checked,
+                            }))
+                          }
+                          disabled={isMutating}
+                        />
+                        <label
+                          htmlFor="guild-notify-start"
+                          className="cursor-pointer select-none text-muted-foreground"
+                        >
+                          When the session starts
+                        </label>
+                      </div>
+                    </div>
+                  </fieldset>
+                  <div className="flex items-center gap-3">
+                    <Button type="submit" disabled={isMutating}>
+                      Save changes
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isMutating}
+                      onClick={() => {
+                        setEditName(detail?.guild.name ?? guild.name);
+                        setEditWebhook(detail?.guild.webhookUrl ?? "");
+                        setNotificationSettings(
+                          detail?.guild.notificationSettings ?? { ...defaultNotificationState },
+                        );
+                      }}
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                </form>
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                  <p className="font-semibold text-destructive">Danger zone</p>
+                  <p className="mt-2 text-muted-foreground">
+                    Deleting a guild removes all sessions and invitations. This action cannot be
+                    undone.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="mt-3"
+                    disabled={isMutating}
+                    onClick={handleDelete}
+                  >
+                    Delete guild
+                  </Button>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {actionError && (

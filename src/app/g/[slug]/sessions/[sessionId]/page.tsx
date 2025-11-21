@@ -20,5 +20,5 @@ export default async function GuildSessionDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  return <SessionDetailPanel initialSession={session} backHref={`/g/${guild.slug}`} />;
+  return <SessionDetailPanel initialSession={session} backHref="/" />;
 }

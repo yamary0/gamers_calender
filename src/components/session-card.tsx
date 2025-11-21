@@ -106,7 +106,7 @@ export function SessionCard({
                         disabled={isPending || !canMutate || (!isParticipant && isFull)}
                         onClick={() => (isParticipant ? onLeave(session) : onJoin(session))}
                     >
-                        {isParticipant ? "Leave" : isFull ? "Full" : "Join"}
+                        {isPending ? "..." : isParticipant ? "Leave" : isFull ? "Full" : "Join"}
                     </Button>
                     <Button
                         variant="outline"

@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { GuildProvider } from "@/components/guild-provider";
 import { GuildSwitcher } from "@/components/guild-switcher";
 import { UserMenu } from "@/components/user-menu";
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 
 const geistSans = Geist({
@@ -22,6 +23,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Aligna",
   description: "気軽に集まりたいプレイヤー同士を結びつけるコミュニティハブ。",
+  icons: {
+    icon: "/aligna_icon.svg",
+  },
 };
 
 import { BottomNav } from "@/components/bottom-nav";
@@ -49,7 +53,7 @@ export default function RootLayout({
                     href="/"
                     className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
-                    Aligna
+                    <Image src="/aligna_icon_positive.svg" alt="Aligna" width={48} height={48} />
                   </Link>
                   <div className="flex items-center gap-3 rounded-full border border-border/30 bg-muted/30 px-3 py-2 shadow-sm backdrop-blur">
                     <GuildSwitcher />
@@ -65,7 +69,7 @@ export default function RootLayout({
                     href="/"
                     className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
-                    Aligna
+                    <Image src="/aligna_icon_positive.svg" alt="Aligna" width={48} height={48} />
                   </Link>
                 </div>
               </header>

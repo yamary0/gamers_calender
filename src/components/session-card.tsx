@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/services/session-store";
 import { describeSessionSchedule } from "@/lib/session-formatters";
+import { AvatarStack } from "@/components/avatar-stack";
 
 type SessionCardProps = {
     session: Session;
@@ -87,36 +88,7 @@ export function SessionCard({
             <div className="mt-auto space-y-4">
                 {/* Participants */}
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center -space-x-2 overflow-hidden">
-                        {session.participants.slice(0, 5).map((p) => (
-                            <div
-                                key={p.id}
-                                className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-medium text-muted-foreground ring-offset-background"
-                                title={p.displayName ?? "User"}
-                            >
-                                {p.avatarUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={p.avatarUrl}
-                                        alt={p.displayName ?? "User"}
-                                        className="h-full w-full rounded-full object-cover"
-                                    />
-                                ) : (
-                                    (p.displayName?.[0] ?? "?").toUpperCase()
-                                )}
-                            </div>
-                        ))}
-                        {participantCount > 5 && (
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[9px] font-medium text-muted-foreground">
-                                +{participantCount - 5}
-                            </div>
-                        )}
-                        {participantCount === 0 && (
-                            <span className="text-xs text-muted-foreground/50 italic">
-                                No participants
-                            </span>
-                        )}
-                    </div>
+                    <AvatarStack participants={session.participants} maxAvatars={5} />
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Users className="h-3.5 w-3.5" />
                         <span>

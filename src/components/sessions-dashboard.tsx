@@ -1,29 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { parseISO } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
 import { SessionsCalendar } from "@/components/sessions-calendar";
-import { describeSessionSchedule } from "@/lib/session-formatters";
-import {
-  buildSchedulePayload,
-  type ScheduleKind,
-} from "@/lib/schedule-utils";
 import { useGuilds } from "@/components/guild-provider";
 import type { Session } from "@/services/session-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { SessionCard } from "@/components/session-card";
+import { CreateSessionDialog } from "@/components/create-session-dialog";
 
 type SessionsDashboardProps = {
   initialSessions: Session[];
@@ -35,13 +22,7 @@ export function SessionsDashboard({
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [createScheduleKind, setCreateScheduleKind] =
-    useState<ScheduleKind>("none");
-  const [createAllDayDate, setCreateAllDayDate] = useState("");
-  const [createStartAt, setCreateStartAt] = useState("");
-  const [createEndAt, setCreateEndAt] = useState("");
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const { session, user } = useAuth();
   const {
@@ -89,27 +70,6 @@ export function SessionsDashboard({
     const data = (await response.json()) as { data: Session[] };
     setSessions(data.data);
   }
-
-  const openCreateForm = () => {
-    if (!canMutate) {
-      setFormError("Sign in to create sessions.");
-      return;
-    }
-    if (!hasGuild) {
-      setFormError("Select a guild first.");
-      return;
-    }
-    setFormError(null);
-    setCreateScheduleKind("none");
-    setCreateAllDayDate("");
-    setCreateStartAt("");
-    setCreateEndAt("");
-    setIsCreateOpen(true);
-  };
-
-  const closeCreateForm = () => {
-    setIsCreateOpen(false);
-  };
 
   const getScheduleStartInstant = (session: Session) => {
     switch (session.schedule.kind) {
@@ -174,61 +134,6 @@ export function SessionsDashboard({
       cancelled = true;
     };
   }, [canMutate, accessToken, selectedGuildId]);
-
-  const handleCreate: React.FormEventHandler<HTMLFormElement> = (event) => {
-    event.preventDefault();
-    if (!canMutate || !selectedGuildId) {
-      setFormError(!canMutate ? "Sign in to create sessions." : "Select a guild first.");
-      return;
-    }
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const title = String(formData.get("title") ?? "").trim();
-    const maxPlayers = Number(formData.get("maxPlayers"));
-
-    startTransition(async () => {
-      setFormError(null);
-      try {
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-        };
-        if (accessToken) {
-          headers.Authorization = `Bearer ${accessToken}`;
-        }
-        const schedule = buildSchedulePayload(
-          createScheduleKind,
-          createAllDayDate,
-          createStartAt,
-          createEndAt,
-        );
-
-        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ title, maxPlayers, schedule }),
-        });
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? "Failed to create session");
-        }
-
-        form.reset();
-        setCreateScheduleKind("none");
-        setCreateAllDayDate("");
-        setCreateStartAt("");
-        setCreateEndAt("");
-        closeCreateForm();
-        await refreshSessions();
-      } catch (error) {
-        setFormError(
-          error instanceof Error ? error.message : "Unable to create session",
-        );
-      }
-    });
-  };
 
   function handleToggleParticipation(targetSession: Session) {
     if (!canMutate || !selectedGuildId) {
@@ -334,195 +239,45 @@ export function SessionsDashboard({
         </div>
       </div>
 
-      {isCreateOpen && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create new session</CardTitle>
-            <CardDescription>
-              Configure the basics and optionally set a schedule.
-            </CardDescription>
-            <CardAction>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={closeCreateForm}
-              >
-                Close
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleCreate}>
-              {!canMutate && (
-                <p className="text-xs text-muted-foreground">
-                  Sign in via the user menu to create sessions.
-                </p>
-              )}
-              {canMutate && !hasGuild && (
-                <p className="text-xs text-muted-foreground">
-                  Select a guild before creating a session.
-                </p>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="create-title">
-                  Title
-                </label>
-                <input
-                  id="create-title"
-                  name="title"
-                  type="text"
-                  minLength={3}
-                  maxLength={120}
-                  required
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  placeholder="Game night in Shibuya"
-                  disabled={!canMutate || !hasGuild || isPending}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="create-max-players">
-                  Maximum players
-                </label>
-                <input
-                  id="create-max-players"
-                  name="maxPlayers"
-                  type="number"
-                  min={1}
-                  required
-                  defaultValue={4}
-                  className="max-w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  disabled={!canMutate || !hasGuild || isPending}
-                />
-              </div>
-              <fieldset className="space-y-3">
-                <legend className="text-xs font-semibold text-muted-foreground">
-                  Schedule (optional)
-                </legend>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={createScheduleKind === "none" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateScheduleKind("none")}
-                    disabled={!canMutate || !hasGuild || isPending}
-                  >
-                    None
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={createScheduleKind === "all-day" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateScheduleKind("all-day")}
-                    disabled={!canMutate || !hasGuild || isPending}
-                  >
-                    All day
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={createScheduleKind === "timed" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreateScheduleKind("timed")}
-                    disabled={!canMutate || !hasGuild || isPending}
-                  >
-                    Timed
-                  </Button>
-                </div>
-
-                {createScheduleKind === "all-day" && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="create-all-day-date">
-                      Date
-                    </label>
-                    <input
-                      id="create-all-day-date"
-                      type="date"
-                      value={createAllDayDate}
-                      onChange={(event) => setCreateAllDayDate(event.target.value)}
-                      className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      disabled={!canMutate || !hasGuild || isPending}
-                      required
-                    />
-                  </div>
-                )}
-                {createScheduleKind === "timed" && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="create-start-at">
-                        Start
-                      </label>
-                      <input
-                        id="create-start-at"
-                        type="datetime-local"
-                        value={createStartAt}
-                        onChange={(event) => setCreateStartAt(event.target.value)}
-                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        disabled={!canMutate || isPending}
-                        required
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground" htmlFor="create-end-at">
-                        End (optional)
-                      </label>
-                      <input
-                        id="create-end-at"
-                        type="datetime-local"
-                        value={createEndAt}
-                        onChange={(event) => setCreateEndAt(event.target.value)}
-                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        disabled={!canMutate || !hasGuild || isPending}
-                      />
-                    </div>
-                  </div>
-                )}
-              </fieldset>
-              <div className="flex items-center gap-2">
-                <Button type="submit" disabled={isPending || !canMutate || !hasGuild}>
-                  {!canMutate
-                    ? "Sign in to create"
-                    : !hasGuild
-                      ? "Select a guild"
-                      : isPending
-                        ? "Saving..."
-                        : "Create"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={closeCreateForm}
-                  disabled={isPending}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="space-y-4">
         {isTabletUp && activeView === "calendar" ? (
-          <SessionsCalendar
-            sessions={calendarSessions}
-            onCreateSession={canMutate && hasGuild ? openCreateForm : undefined}
-          />
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              {canMutate && hasGuild && selectedGuildId && (
+                <CreateSessionDialog
+                  guildId={selectedGuildId}
+                  accessToken={accessToken}
+                  onSessionCreated={refreshSessions}
+                  trigger={
+                    <Button size="sm" className="h-8 text-xs">
+                      + Session
+                    </Button>
+                  }
+                />
+              )}
+            </div>
+            <SessionsCalendar
+              sessions={calendarSessions}
+            />
+          </div>
         ) : (
           <>
             {/* Feed Header / Actions */}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Active Sessions</h2>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={openCreateForm}
-                  disabled={!canMutate || !hasGuild}
-                  className="h-8 text-xs"
-                >
-                  + Session
-                </Button>
+                {canMutate && hasGuild && selectedGuildId && (
+                  <CreateSessionDialog
+                    guildId={selectedGuildId}
+                    accessToken={accessToken}
+                    onSessionCreated={refreshSessions}
+                    trigger={
+                      <Button variant="outline" size="sm" className="h-8 text-xs">
+                        + Session
+                      </Button>
+                    }
+                  />
+                )}
                 <Button
                   type="button"
                   variant="ghost"

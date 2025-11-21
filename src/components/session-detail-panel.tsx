@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import { CalendarClock, Users, ArrowLeft, MoreVertical, Trash2, Edit2, RefreshCw } from "lucide-react";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/components/auth-provider";
 import { describeSessionSchedule } from "@/lib/session-formatters";
 import {
@@ -21,6 +37,8 @@ import {
   type ScheduleKind,
 } from "@/lib/schedule-utils";
 import type { Session } from "@/services/session-store";
+import { AvatarStack } from "@/components/avatar-stack";
+import { cn } from "@/lib/utils";
 
 type SessionDetailPanelProps = {
   initialSession: Session;
@@ -64,7 +82,6 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
   );
 
   const createdLabel = format(parseISO(session.createdAt), "MMM d, yyyy HH:mm");
-  const participantCount = `${session.participants.length}/${session.maxPlayers}`;
   const canAttemptJoin = session.status !== "active";
   const actionDisabled =
     isPending || !canMutate || !guildId || (!isParticipant && !canAttemptJoin);
@@ -264,346 +281,259 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
     setIsEditing(false);
   };
 
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      {!guildId && (
-        <ErrorToast message="This session is not associated with a guild. Actions are limited." />
-      )}
-      <div className="flex items-center justify-between">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={backHref ?? "/"}>← Back</Link>
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isPending}
-          >
-            Refresh
+  if (isEditing) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={cancelEditing}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={isPending || !canMutate}
-          >
-            Delete
-          </Button>
+          <h2 className="text-lg font-semibold">Edit Session</h2>
         </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{session.title}</CardTitle>
-          <CardDescription>Session overview and status</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Status
-              </p>
-              <p className="text-base font-semibold text-foreground">
-                {session.status}
-              </p>
-            </div>
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Participants
-              </p>
-              <p className="text-base font-semibold text-foreground">
-                {participantCount}
-              </p>
-            </div>
-          </div>
-          <div className="rounded-md border border-border bg-muted/40 px-3 py-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Schedule
-            </p>
-            <p className="text-base font-semibold text-foreground">
-              {describeSessionSchedule(session)}
-            </p>
-          </div>
-          <div className="rounded-md border border-dashed border-border bg-muted/10 px-3 py-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Created
-            </p>
-            <p className="text-base font-semibold text-foreground">
-              {createdLabel}
-            </p>
-            <p className="mt-1 break-words font-mono text-xs text-muted-foreground">
-              ID: {session.id}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Participants</CardTitle>
-          <CardDescription>
-            Discord sign-ins show their display name and avatar when available.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {session.participants.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No participants have joined yet.
-            </p>
-          ) : (
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {session.participants.map((participant) => {
-                const isDiscord = participant.provider === "discord";
-                const label = isDiscord && participant.displayName
-                  ? participant.displayName
-                  : participant.id;
-                const secondary = isDiscord
-                  ? `Discord · ${participant.id}`
-                  : `ID · ${participant.id}`;
-                const fallbackInitial = label
-                  .trim()
-                  .charAt(0)
-                  .toUpperCase();
-
-                return (
-                <li
-                  key={participant.id}
-                  className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-3"
-                >
-                  <div className="flex size-10 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-xs font-medium text-muted-foreground">
-                    {isDiscord && participant.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={participant.avatarUrl}
-                        alt={`${label}'s avatar`}
-                        referrerPolicy="no-referrer"
-                        className="size-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span>{fallbackInitial || "?"}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-foreground">
-                      {label}
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {secondary}
-                    </span>
-                  </div>
-                </li>
-              );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Manage session</CardTitle>
-          <CardDescription>
-            Join, edit, or delete this session. Changes require authentication.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {authLoading ? (
-            <p className="text-sm text-muted-foreground">Loading session…</p>
-          ) : user ? (
-            <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-xs">
-              <p className="font-medium text-foreground">
-                Signed in as {user.email ?? user.id}
-              </p>
-              <p className="text-muted-foreground">User ID: {user.id}</p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Sign in on the dashboard to manage sessions.
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              onClick={handleParticipationToggle}
-              disabled={actionDisabled}
-            >
-              {!canMutate
-                ? "Sign in to manage"
-                : !guildId
-                  ? "Select a guild"
-                  : isParticipant
-                    ? isPending
-                      ? "Leaving..."
-                      : "Leave session"
-                    : session.status === "active"
-                      ? "Session ready"
-                      : isPending
-                        ? "Joining..."
-                        : "Join session"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={isEditing ? cancelEditing : beginEditing}
-              disabled={isPending || !canMutate || !guildId}
-            >
-              {isEditing ? "Cancel" : "Edit session"}
-            </Button>
-          </div>
-
-          {isEditing && (
-            <form
-              className="space-y-3 rounded-md border border-border bg-background px-4 py-3 text-sm shadow-sm"
-              onSubmit={handleUpdate}
-            >
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-xs font-medium text-muted-foreground"
-                  htmlFor="detail-edit-title"
-                >
-                  Title
-                </label>
-                <input
-                  id="detail-edit-title"
+        <Card>
+          <CardContent className="pt-6">
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
                   value={editTitle}
-                  onChange={(event) => setEditTitle(event.target.value)}
+                  onChange={(e) => setEditTitle(e.target.value)}
                   required
                   minLength={3}
-                  className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  disabled={!canMutate || !guildId || isPending}
+                  maxLength={120}
+                  disabled={isPending}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-xs font-medium text-muted-foreground"
-                  htmlFor="detail-edit-max"
-                >
-                  Maximum players
-                </label>
-                <input
-                  id="detail-edit-max"
+              <div className="space-y-2">
+                <Label htmlFor="edit-max-players">Max Players</Label>
+                <Input
+                  id="edit-max-players"
                   type="number"
                   min={1}
                   value={editMaxPlayers}
-                  onChange={(event) => setEditMaxPlayers(event.target.value)}
+                  onChange={(e) => setEditMaxPlayers(e.target.value)}
                   required
-                  className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  disabled={!canMutate || !guildId || isPending}
+                  disabled={isPending}
                 />
               </div>
-              <fieldset className="space-y-2">
-                <legend className="text-xs font-medium text-muted-foreground">
-                  Schedule
-                </legend>
-                <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={editScheduleKind === "none" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setEditScheduleKind("none")}
-                >
-                    None
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      editScheduleKind === "all-day" ? "default" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setEditScheduleKind("all-day")}
-                  >
-                    All day
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={
-                      editScheduleKind === "timed" ? "default" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setEditScheduleKind("timed")}
-                  >
-                    Timed
-                  </Button>
-                </div>
-                {editScheduleKind === "all-day" && (
-                  <div className="flex flex-col gap-1.5">
-                    <label
-                      className="text-xs font-medium text-muted-foreground"
-                      htmlFor="detail-edit-all-day"
-                    >
-                      Date
-                    </label>
-                    <input
-                      id="detail-edit-all-day"
-                      type="date"
-                      value={editAllDayDate}
-                      onChange={(event) => setEditAllDayDate(event.target.value)}
-                      className="max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      required
-                    />
-                  </div>
-                )}
-                {editScheduleKind === "timed" && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-xs font-medium text-muted-foreground"
-                        htmlFor="detail-edit-start"
-                      >
-                        Start
-                      </label>
-                      <input
-                        id="detail-edit-start"
-                        type="datetime-local"
-                        value={editStartAt}
-                        onChange={(event) => setEditStartAt(event.target.value)}
-                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        required
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-xs font-medium text-muted-foreground"
-                        htmlFor="detail-edit-end"
-                      >
-                        End (optional)
-                      </label>
-                      <input
-                        id="detail-edit-end"
-                        type="datetime-local"
-                        value={editEndAt}
-                        onChange={(event) => setEditEndAt(event.target.value)}
-                        className="rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                  </div>
-                )}
-              </fieldset>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Saving..." : "Save changes"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={cancelEditing}
+
+              <div className="space-y-2">
+                <Label>Schedule Type</Label>
+                <Select
+                  value={editScheduleKind}
+                  onValueChange={(v) => setEditScheduleKind(v as ScheduleKind)}
                   disabled={isPending}
                 >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Schedule</SelectItem>
+                    <SelectItem value="timed">Timed</SelectItem>
+                    <SelectItem value="all-day">All Day</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editScheduleKind === "all-day" && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-all-day">Date</Label>
+                  <Input
+                    id="edit-all-day"
+                    type="date"
+                    value={editAllDayDate}
+                    onChange={(e) => setEditAllDayDate(e.target.value)}
+                    required
+                    disabled={isPending}
+                  />
+                </div>
+              )}
+
+              {editScheduleKind === "timed" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-start">Start</Label>
+                    <Input
+                      id="edit-start"
+                      type="datetime-local"
+                      value={editStartAt}
+                      onChange={(e) => setEditStartAt(e.target.value)}
+                      required
+                      disabled={isPending}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-end">End (Optional)</Label>
+                    <Input
+                      id="edit-end"
+                      type="datetime-local"
+                      value={editEndAt}
+                      onChange={(e) => setEditEndAt(e.target.value)}
+                      disabled={isPending}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="ghost" onClick={cancelEditing} disabled={isPending}>
                   Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
             </form>
-          )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-          {authError && <ErrorToast message={authError} />}
-          {formError && <ErrorToast message={formError} />}
-        </CardContent>
-      </Card>
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+      {/* Navigation & Actions */}
+      <div className="flex items-center justify-between">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
+          <Link href={backHref ?? "/"}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Feed
+          </Link>
+        </Button>
+
+        <div className="flex items-center gap-2">
+          {canMutate && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleRefresh}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={beginEditing}>
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit Session
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Session
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+
+      {/* Hero Section */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-muted/50 p-8 shadow-lg">
+        <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+                  session.status === "active"
+                    ? "bg-blue-500/10 text-blue-400"
+                    : "bg-green-500/10 text-green-400"
+                )}
+              >
+                {session.status === "active" ? "Full" : "Recruiting"}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Created {createdLabel}
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              {session.title}
+            </h1>
+            <div className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" />
+                <span>{describeSessionSchedule(session)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                <span>{session.participants.length}/{session.maxPlayers} Players</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row md:flex-col lg:flex-row">
+            <Button
+              size="lg"
+              className={cn(
+                "w-full md:w-auto",
+                isParticipant ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : ""
+              )}
+              variant={isParticipant ? "ghost" : "default"}
+              onClick={handleParticipationToggle}
+              disabled={actionDisabled}
+            >
+              {isParticipant ? "Leave Session" : "Join Session"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Participants Section */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Participants</h3>
+        <Card>
+          <CardContent className="p-6">
+            {session.participants.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <Users className="mb-3 h-10 w-10 opacity-20" />
+                <p>No one has joined yet.</p>
+                <p className="text-sm">Be the first to join!</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {session.participants.map((participant) => {
+                  const isDiscord = participant.provider === "discord";
+                  const label = isDiscord && participant.displayName
+                    ? participant.displayName
+                    : participant.id;
+
+                  return (
+                    <div key={participant.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-border bg-background">
+                        {isDiscord && participant.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={participant.avatarUrl}
+                            alt={label}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
+                            {label.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {label}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {isDiscord ? "Discord User" : "Guest User"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {authError && <ErrorToast message={authError} />}
+      {formError && <ErrorToast message={formError} />}
     </div>
   );
 }

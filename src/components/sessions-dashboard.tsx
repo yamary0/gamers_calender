@@ -197,6 +197,16 @@ export function SessionsDashboard({
     <section className="space-y-6">
       {formError && <ErrorToast message={formError} />}
 
+      {/* Active Guild Indicator */}
+      {selectedGuild && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+            {selectedGuild.name.charAt(0).toUpperCase()}
+          </div>
+          <span className="font-medium text-foreground">{selectedGuild.name}</span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {isTabletUp && (
           <div
@@ -231,9 +241,11 @@ export function SessionsDashboard({
             <span>Loading guilds…</span>
           ) : guilds.length === 0 ? (
             <span>Create or join a guild to start sharing sessions.</span>
+          ) : !selectedGuild ? (
+            <span>Select a guild to view sessions</span>
           ) : (
-            <span>
-              Viewing guild: <strong>{guilds.find((guild) => guild.id === selectedGuildId)?.name ?? "Select"}</strong>
+            <span className="text-muted-foreground/70">
+              {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
             </span>
           )}
         </div>

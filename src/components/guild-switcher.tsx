@@ -288,44 +288,82 @@ export function GuildSwitcher({ trigger, side = "bottom" }: { trigger?: React.Re
                     </p>
                   ) : (
                     <ul className="space-y-2 md:space-y-1">
-                      {guilds.map((guild) => (
-                        <li key={guild.id}>
-                          <div
-                            className={`flex items-center justify-between gap-2 rounded-md border px-3 py-3 text-sm transition md:py-2 md:text-xs ${selectedGuildId === guild.id
-                              ? "border-primary/60 bg-primary/5"
-                              : "border-border bg-background"
-                              }`}
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="flex-1 justify-start px-0 text-left hover:bg-transparent"
-                              onClick={() => {
-                                selectGuild(guild.id);
-                                setIsOpen(false);
-                              }}
+                      {guilds.map((guild) => {
+                        const isSelected = selectedGuildId === guild.id;
+                        return (
+                          <li key={guild.id}>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg border px-3 py-3 transition-all md:py-2",
+                                isSelected
+                                  ? "border-primary/50 bg-primary/10 shadow-sm"
+                                  : "border-border bg-background hover:border-border/80 hover:bg-muted/30"
+                              )}
                             >
-                              <span className="font-medium text-foreground">{guild.name}</span>
-                              <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                {guild.role}
-                              </span>
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setIsOpen(false);
-                                router.push(`/g/${guild.slug}`);
-                              }}
-                              className="flex items-center gap-1 px-3 md:px-2 md:text-[11px]"
-                            >
-                              <Eye className="h-4 w-4 md:h-3 md:w-3" aria-hidden="true" />
-                              <span className="hidden sm:inline">View</span>
-                            </Button>
-                          </div>
-                        </li>
-                      ))}
+                              {/* Guild Initial Icon */}
+                              <div
+                                className={cn(
+                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold md:h-7 md:w-7 md:text-[10px]",
+                                  isSelected
+                                    ? "bg-primary/20 text-primary"
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                {guild.name.charAt(0).toUpperCase()}
+                              </div>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="flex-1 justify-start px-0 text-left hover:bg-transparent"
+                                onClick={() => {
+                                  selectGuild(guild.id);
+                                  setIsOpen(false);
+                                }}
+                              >
+                                <span className={cn(
+                                  "text-sm md:text-xs",
+                                  isSelected ? "font-semibold text-foreground" : "text-foreground/80"
+                                )}>
+                                  {guild.name}
+                                </span>
+                              </Button>
+
+                              {/* Check Mark for Selected */}
+                              {isSelected && (
+                                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                  <svg
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={3}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                </div>
+                              )}
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto p-1 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  router.push(`/g/${guild.slug}`);
+                                  setIsOpen(false);
+                                }}
+                              >
+                                <Eye className="h-4 w-4 md:h-3.5 md:w-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>

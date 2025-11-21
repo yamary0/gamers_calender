@@ -71,7 +71,7 @@ export function LandingPage() {
   };
 
   return (
-    <div className="relative space-y-12 overflow-hidden rounded-3xl border border-[#1f2844] bg-gradient-to-b from-[#111a2f] via-[#111a2f] to-[#080e1a] p-10 text-foreground shadow-[0_40px_180px_-60px_rgba(83,99,224,0.8)]">
+    <div className="relative space-y-12 overflow-hidden rounded-3xl border border-[#1f2844] bg-gradient-to-b from-[#111a2f] via-[#111a2f] to-[#080e1a] p-6 text-foreground shadow-[0_40px_180px_-60px_rgba(83,99,224,0.8)] md:p-10">
       <div className="pointer-events-none absolute -top-32 right-[-15%] size-[420px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.35),_rgba(17,24,39,0))] blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 left-[-10%] size-[360px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.35),_rgba(8,14,26,0))] blur-3xl" />
 

@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   description: "気軽に集まりたいプレイヤー同士を結びつけるコミュニティハブ。",
 };
 
+import { BottomNav } from "@/components/bottom-nav";
+
+// ... imports
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,7 +41,8 @@ export default function RootLayout({
         <AuthProvider>
           <GuildProvider>
             <div className="flex min-h-screen flex-col bg-[#0f1629] text-foreground">
-              <header className="relative z-30 border-b border-[#1a2341] bg-[#1f273f]/80 text-foreground shadow-lg backdrop-blur">
+              {/* Desktop Header */}
+              <header className="relative z-30 hidden border-b border-[#1a2341] bg-[#1f273f]/80 text-foreground shadow-lg backdrop-blur md:block">
                 <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
                   <Link
                     href="/"
@@ -52,14 +57,28 @@ export default function RootLayout({
                 </div>
               </header>
 
-              <main className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-10">
+              {/* Mobile Header (Simple Logo) */}
+              <header className="sticky top-0 z-30 border-b border-[#1a2341] bg-[#1f273f]/80 text-foreground shadow-lg backdrop-blur md:hidden">
+                <div className="flex h-14 items-center justify-center px-4">
+                  <Link
+                    href="/"
+                    className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
+                  >
+                    Aligna
+                  </Link>
+                </div>
+              </header>
+
+              <main className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 pb-24 md:px-6 md:py-10 md:pb-10">
                 <div className="pointer-events-none absolute inset-0 -z-10 rounded-[32px] border border-[#1a2341] bg-[#111a2f]/90 shadow-[0_30px_120px_-60px_rgba(88,101,242,0.8)] backdrop-blur-lg" />
                 <div className="z-10 flex-1">
                   {children}
                 </div>
               </main>
 
-              <footer className="border-t border-[#1a2341] bg-[#070d19] text-slate-200">
+              <BottomNav />
+
+              <footer className="hidden border-t border-[#1a2341] bg-[#070d19] text-slate-200 md:block">
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col gap-1 text-xs">
                     <span className="font-medium text-foreground/70">

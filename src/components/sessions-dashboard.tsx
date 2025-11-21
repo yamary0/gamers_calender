@@ -23,6 +23,7 @@ import {
 import { useGuilds } from "@/components/guild-provider";
 import type { Session } from "@/services/session-store";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { SessionCard } from "@/components/session-card";
 
 type SessionsDashboardProps = {
   initialSessions: Session[];
@@ -61,6 +62,7 @@ export function SessionsDashboard({
       setActiveView("feed");
     }
   }, [isTabletUp]);
+
   async function refreshSessions() {
     if (!canMutate || !selectedGuildId) {
       setSessions([]);
@@ -331,6 +333,7 @@ export function SessionsDashboard({
           )}
         </div>
       </div>
+
       {isCreateOpen && (
         <Card>
           <CardHeader>
@@ -505,19 +508,18 @@ export function SessionsDashboard({
             onCreateSession={canMutate && hasGuild ? openCreateForm : undefined}
           />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Active sessions</CardTitle>
-              <CardDescription>
-                Join a session to move it into the ready state.
-              </CardDescription>
-              <CardAction className="flex items-center gap-2">
+          <>
+            {/* Feed Header / Actions */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Active Sessions</h2>
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={openCreateForm}
                   disabled={!canMutate || !hasGuild}
+                  className="h-8 text-xs"
                 >
                   + Session
                 </Button>
@@ -539,97 +541,39 @@ export function SessionsDashboard({
                     })
                   }
                   disabled={isPending}
+                  className="h-8 text-xs"
                 >
                   Refresh
                 </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                {sessions.length === 0 && (
-                  <li className="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                    {!canMutate
-                      ? "Sign in to view guild sessions."
-                      : !hasGuild
-                        ? "Select or create a guild to view sessions."
-                        : "No sessions yet. Use + Session to add one."}
-                  </li>
-                )}
-                {sessions.map((session) => {
-                  const participants = `${session.participants.length}/${session.maxPlayers}`;
-                  const isFull = session.status === "active";
-                  const isParticipant = Boolean(
-                    userId && session.participants.some((participant) => participant.id === userId),
-                  );
-                  return (
-                    <li
-                      key={session.id}
-                      className="flex flex-col gap-3 rounded-xl border border-[#1f2747] bg-[#141c35]/90 px-4 py-4 shadow-[0_25px_80px_-60px_rgba(88,101,242,0.7)] backdrop-blur-sm"
-                    >
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold">{session.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Status:{" "}
-                            <span className="font-medium text-foreground">
-                              {session.status}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Participants:{" "}
-                            <span className="font-medium text-foreground">
-                              {participants}
-                            </span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Schedule:{" "}
-                            <span className="font-medium text-foreground">
-                              {describeSessionSchedule(session)}
-                            </span>
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            type="button"
-                            onClick={() => handleToggleParticipation(session)}
-                            disabled={
-                              isPending ||
-                              !canMutate ||
-                              !isParticipant &&
-                                (isFull || !selectedGuildId)
-                            }
-                          >
-                            {!canMutate
-                              ? "Sign in"
-                              : !selectedGuildId
-                                ? "Select guild"
-                                : isParticipant
-                                  ? isPending
-                                    ? "Leaving..."
-                                    : "Leave"
-                                  : isFull
-                                    ? "Ready"
-                                    : isPending
-                                      ? "Joining..."
-                                      : "Join"}
-                          </Button>
-                          <Button asChild variant="secondary">
-                            <Link
-                              href={selectedGuild?.slug
-                                ? `/g/${selectedGuild.slug}/sessions/${session.id}`
-                                : `/sessions/${session.id}`}
-                            >
-                              Details
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+
+            {/* Grid Feed */}
+            {sessions.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
+                {!canMutate
+                  ? "Sign in to view guild sessions."
+                  : !hasGuild
+                    ? "Select or create a guild to view sessions."
+                    : "No sessions yet. Create one to get started!"}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {sessions.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    userId={userId}
+                    selectedGuildSlug={selectedGuild?.slug}
+                    onJoin={() => handleToggleParticipation(session)}
+                    onLeave={() => handleToggleParticipation(session)}
+                    isPending={isPending}
+                    canMutate={canMutate}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>

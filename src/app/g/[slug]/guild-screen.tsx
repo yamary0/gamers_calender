@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/components/auth-provider";
 import { useGuilds } from "@/components/guild-provider";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type GuildScreenProps = {
   slug: string;
@@ -75,17 +77,17 @@ export function GuildScreen({ slug }: GuildScreenProps) {
   const [detail, setDetail] = useState<GuildDetailPayload | null>(null);
   const [members, setMembers] = useState<GuildMember[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
-const [detailLoading, setDetailLoading] = useState(false);
-const [editName, setEditName] = useState("");
-const [editWebhook, setEditWebhook] = useState("");
-const [actionError, setActionError] = useState<string | null>(null);
-const [inviteLink, setInviteLink] = useState<string | null>(null);
-const [inviteMessage, setInviteMessage] = useState<string | null>(null);
-const [invitePending, setInvitePending] = useState(false);
-const [notificationSettings, setNotificationSettings] = useState({
-  ...defaultNotificationState,
-});
-const [isMutating, startMutation] = useTransition();
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editWebhook, setEditWebhook] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [invitePending, setInvitePending] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState({
+    ...defaultNotificationState,
+  });
+  const [isMutating, startMutation] = useTransition();
 
   const guild = useMemo(
     () => guilds.find((item) => item.slug === slug) ?? null,
@@ -375,13 +377,21 @@ const [isMutating, startMutation] = useTransition();
 
   return (
     <div className="w-full space-y-8">
-      <div className="space-y-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Guild
-        </span>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {detail?.guild.name ?? guild.name}
-        </h1>
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          {/* Guild Initial Icon */}
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl font-bold text-primary shadow-sm">
+            {(detail?.guild.name ?? guild.name).charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Guild
+            </span>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {detail?.guild.name ?? guild.name}
+            </h1>
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground">
           Coordinate sessions scoped to this guild. Share the invite link so others can join.
         </p>
@@ -394,65 +404,26 @@ const [isMutating, startMutation] = useTransition();
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base">Guild overview</CardTitle>
-            <CardDescription>Metadata and ownership details.</CardDescription>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void loadDetail();
-            }}
-            disabled={detailLoading}
-          >
-            Refresh
-          </Button>
+        <CardHeader>
+          <CardTitle className="text-base">Guild Info</CardTitle>
+          <CardDescription>Your membership details</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div className="space-y-1">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Guild name
+                Members
               </dt>
               <dd className="font-medium text-foreground">
-                {detail?.guild.name ?? guild.name}
-              </dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Slug
-              </dt>
-              <dd className="font-mono text-xs text-muted-foreground">
-                {detail?.guild.slug ?? guild.slug}
-              </dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Created
-              </dt>
-              <dd>
-                {createdAt
-                  ? format(new Date(createdAt), "yyyy-MM-dd HH:mm")
-                  : "—"}
+                {members.length} {members.length === 1 ? 'member' : 'members'}
               </dd>
             </div>
             <div className="space-y-1">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                 Your role
               </dt>
-              <dd className="capitalize">
+              <dd className="capitalize font-medium text-foreground">
                 {detail?.membership.role ?? "member"}
-              </dd>
-            </div>
-            <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Discord webhook
-              </dt>
-              <dd className="text-xs text-muted-foreground">
-                {webhookConfigured ?? "Not configured"}
               </dd>
             </div>
           </dl>
@@ -519,57 +490,47 @@ const [isMutating, startMutation] = useTransition();
               No members yet. Share an invite link to add more players.
             </p>
           ) : (
-            <div className="overflow-hidden rounded-md border border-border">
-              <table className="min-w-full divide-y divide-border text-sm">
-                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2">Member</th>
-                    <th className="px-4 py-2">Role</th>
-                    <th className="px-4 py-2">Joined</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border bg-background">
-                  {members.map((member) => {
-                    const label = member.displayName ?? "Unknown player";
-                    const fallbackInitial = label.charAt(0).toUpperCase();
-                    return (
-                      <tr key={`${member.guildId}-${member.userId}`}>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-3">
-                            <div className="relative flex size-8 items-center justify-center overflow-hidden rounded-full bg-secondary text-xs font-semibold uppercase text-secondary-foreground">
-                              {member.avatarUrl ? (
-                                <Image
-                                  src={member.avatarUrl}
-                                  alt={`${label} avatar`}
-                                  fill
-                                  sizes="32px"
-                                  className="object-cover"
-                                  loading="lazy"
-                                  unoptimized
-                                />
-                              ) : (
-                                <span>{fallbackInitial}</span>
-                              )}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-medium text-foreground">
-                                {label}
-                              </span>
-                              <span className="font-mono text-xs text-muted-foreground">
-                                {member.userId}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 capitalize">{member.role}</td>
-                        <td className="px-4 py-2 text-muted-foreground">
-                          {format(new Date(member.joinedAt), "yyyy-MM-dd HH:mm")}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="grid gap-3">
+              {members.map((member) => {
+                const label = member.displayName ?? "Unknown player";
+                const fallbackInitial = label.charAt(0).toUpperCase();
+                return (
+                  <div
+                    key={`${member.guildId}-${member.userId}`}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/30"
+                  >
+                    {/* Avatar */}
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-semibold uppercase text-foreground">
+                      {member.avatarUrl ? (
+                        <Image
+                          src={member.avatarUrl}
+                          alt={`${label} avatar`}
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                          loading="lazy"
+                          unoptimized
+                        />
+                      ) : (
+                        <span>{fallbackInitial}</span>
+                      )}
+                    </div>
+
+                    {/* Member Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{label}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                    </div>
+
+                    {/* Joined Date */}
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(member.joinedAt), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -583,41 +544,29 @@ const [isMutating, startMutation] = useTransition();
           </CardHeader>
           <CardContent className="space-y-6">
             <form className="space-y-3" onSubmit={handleUpdate}>
-              <div className="space-y-1">
-                <label
-                  htmlFor="guild-edit-name"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Guild name
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="guild-edit-name">Guild name</Label>
+                <Input
                   id="guild-edit-name"
                   type="text"
                   value={editName}
                   onChange={(event) => setEditName(event.target.value)}
                   minLength={3}
                   maxLength={120}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   disabled={isMutating}
                 />
               </div>
-              <div className="space-y-1">
-                <label
-                  htmlFor="guild-edit-webhook"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Discord webhook URL
-                </label>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="guild-edit-webhook">Discord webhook URL</Label>
+                <Input
                   id="guild-edit-webhook"
                   type="url"
                   value={editWebhook}
                   onChange={(event) => setEditWebhook(event.target.value)}
                   placeholder="https://discord.com/api/webhooks/..."
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   disabled={isMutating}
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Leave blank to disable notifications for this guild.
                 </p>
               </div>

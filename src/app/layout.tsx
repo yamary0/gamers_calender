@@ -40,17 +40,18 @@ export default function RootLayout({
       >
         <AuthProvider>
           <GuildProvider>
-            <div className="flex min-h-screen flex-col bg-[#0f1629] text-foreground">
-              {/* Desktop Header */}
-              <header className="relative z-30 hidden border-b border-[#1a2341] bg-[#1f273f]/80 text-foreground shadow-lg backdrop-blur md:block">
-                <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
+            <div className="flex min-h-screen flex-col bg-background text-foreground">
+              {/* Desktop Header with enhanced glassmorphism */}
+              <header className="relative z-30 hidden border-b border-border/50 bg-card/80 text-foreground shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/60 md:block">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/10 to-transparent" />
+                <div className="relative mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
                   <Link
                     href="/"
                     className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
                     Aligna
                   </Link>
-                  <div className="flex items-center gap-3 rounded-full bg-[#111a2f]/60 px-3 py-2 backdrop-blur">
+                  <div className="flex items-center gap-3 rounded-full border border-border/30 bg-muted/30 px-3 py-2 shadow-sm backdrop-blur">
                     <GuildSwitcher />
                     <UserMenu />
                   </div>
@@ -58,7 +59,7 @@ export default function RootLayout({
               </header>
 
               {/* Mobile Header (Simple Logo) */}
-              <header className="sticky top-0 z-30 border-b border-[#1a2341] bg-[#1f273f]/80 text-foreground shadow-lg backdrop-blur md:hidden">
+              <header className="sticky top-0 z-30 border-b border-border/50 bg-card/80 text-foreground shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-card/60 md:hidden">
                 <div className="flex h-14 items-center justify-center px-4">
                   <Link
                     href="/"
@@ -70,7 +71,7 @@ export default function RootLayout({
               </header>
 
               <main className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 pb-24 md:px-6 md:py-10 md:pb-10">
-                <div className="pointer-events-none absolute inset-0 -z-10 rounded-[32px] border border-[#1a2341] bg-[#111a2f]/90 shadow-[0_30px_120px_-60px_rgba(88,101,242,0.8)] backdrop-blur-lg" />
+                <div className="pointer-events-none absolute inset-0 -z-10 rounded-3xl border border-border/50 bg-card/40 shadow-[0_20px_80px_-40px_rgba(88,101,242,0.3)] backdrop-blur-sm" />
                 <div className="z-10 flex-1">
                   {children}
                 </div>
@@ -78,7 +79,7 @@ export default function RootLayout({
 
               <BottomNav />
 
-              <footer className="hidden border-t border-[#1a2341] bg-[#070d19] text-slate-200 md:block">
+              <footer className="hidden border-t border-border/50 bg-card/60 text-slate-200 backdrop-blur-sm md:block">
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col gap-1 text-xs">
                     <span className="font-medium text-foreground/70">

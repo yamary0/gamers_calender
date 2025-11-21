@@ -24,6 +24,7 @@ export function SessionsDashboard({
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const router = useRouter();
 
   const { session, user } = useAuth();
@@ -159,6 +160,7 @@ export function SessionsDashboard({
       return;
     }
 
+    setPendingSessionId(targetSession.id);
     startTransition(async () => {
       setFormError(null);
       try {
@@ -190,6 +192,10 @@ export function SessionsDashboard({
           error instanceof Error
             ? error.message
             : "Unable to update session membership",
+        );
+      } finally {
+        setPendingSessionId((current) =>
+          current === targetSession.id ? null : current,
         );
       }
     });
@@ -339,7 +345,7 @@ export function SessionsDashboard({
                     selectedGuildSlug={selectedGuild?.slug}
                     onJoin={() => handleToggleParticipation(session)}
                     onLeave={() => handleToggleParticipation(session)}
-                    isPending={isPending}
+                    isPending={pendingSessionId === session.id}
                     canMutate={canMutate}
                   />
                 ))}

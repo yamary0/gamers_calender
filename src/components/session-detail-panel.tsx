@@ -500,7 +500,10 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
                     : participant.id;
 
                   return (
-                    <div key={participant.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                    <div
+                      key={participant.id}
+                      className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                    >
                       <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-border bg-background">
                         {isDiscord && participant.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -516,7 +519,7 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
+                        <p className="w-full truncate text-sm font-medium text-foreground" title={label}>
                           {label}
                         </p>
                         <p className="truncate text-xs text-muted-foreground">

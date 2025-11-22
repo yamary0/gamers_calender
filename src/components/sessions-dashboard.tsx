@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { parseISO, format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { parseISO, format, isToday, isTomorrow, isYesterday, startOfToday } from "date-fns";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function SessionsDashboard({
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [hasFetched, setHasFetched] = useState(initialSessions.length > 0);
+  const [isPastCollapsed, setIsPastCollapsed] = useState(true);
   const router = useRouter();
 
   const { session, user } = useAuth();
@@ -179,6 +180,17 @@ export function SessionsDashboard({
     [sessions],
   );
 
+  const todayStart = useMemo(() => startOfToday().getTime(), []);
+
+  const isPastGroup = useCallback(
+    (dateString: string) => {
+      if (dateString === "9999-12-31") return false;
+      const date = parseISO(dateString);
+      return date.getTime() < todayStart;
+    },
+    [todayStart],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -217,6 +229,21 @@ export function SessionsDashboard({
       cancelled = true;
     };
   }, [fetchSessions]);
+
+  const { upcomingGroups, pastGroups } = useMemo(() => {
+    const upcoming: typeof groupedSessions = [];
+    const past: typeof groupedSessions = [];
+
+    groupedSessions.forEach((group) => {
+      if (isPastGroup(group.date)) {
+        past.push(group);
+      } else {
+        upcoming.push(group);
+      }
+    });
+
+    return { upcomingGroups: upcoming, pastGroups: past };
+  }, [groupedSessions, isPastGroup]);
 
   function handleToggleParticipation(targetSession: Session) {
     if (!canMutate || !selectedGuildId) {
@@ -473,9 +500,9 @@ export function SessionsDashboard({
               </div>
             ) : (
               <div className="space-y-6">
-                {groupedSessions.map((group) => (
+                {upcomingGroups.map((group) => (
                   <div key={group.date} className="space-y-3">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                       {group.label}
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -494,6 +521,51 @@ export function SessionsDashboard({
                     </div>
                   </div>
                 ))}
+                {pastGroups.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        Past Sessions
+                      </h3>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => setIsPastCollapsed((prev) => !prev)}
+                        className="h-7 text-[11px]"
+                      >
+                        {isPastCollapsed ? "Show" : "Hide"}
+                      </Button>
+                    </div>
+                    {isPastCollapsed ? (
+                      <div className="rounded-lg border border-dashed border-border/60 bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
+                        Past sessions hidden — tap “Show” to expand.
+                      </div>
+                    ) : (
+                      pastGroups.map((group) => (
+                        <div key={group.date} className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {group.label}
+                          </p>
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {group.sessions.map((session) => (
+                              <SessionCard
+                                key={session.id}
+                                session={session}
+                                userId={userId}
+                                selectedGuildSlug={selectedGuild?.slug}
+                                onJoin={() => handleToggleParticipation(session)}
+                                onLeave={() => handleToggleParticipation(session)}
+                                isPending={pendingSessionId === session.id}
+                                canMutate={canMutate}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

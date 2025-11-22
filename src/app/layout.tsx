@@ -26,6 +26,12 @@ export const metadata: Metadata = {
   icons: {
     icon: "/aligna_icon.svg",
   },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
 };
 
 import { BottomNav } from "@/components/bottom-nav";

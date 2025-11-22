@@ -9,7 +9,7 @@ import { GuildSwitcher } from "@/components/guild-switcher";
 import { UserMenu } from "@/components/user-menu";
 import Image from 'next/image';
 import { Button } from "@/components/ui/button";
-
+import FooterYear from "@/components/footer-year";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -44,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -93,7 +93,7 @@ export default function RootLayout({
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col gap-1 text-xs">
                     <span className="font-medium text-foreground/70">
-                      © {new Date().getFullYear()} Aligna.
+                      © <FooterYear /> Aligna.
                     </span>
                     <span className="text-foreground/50">
                       「誘われたら行きたい」を叶える仲間づくりプラットフォーム。

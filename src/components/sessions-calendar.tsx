@@ -102,12 +102,22 @@ export function SessionsCalendar({ sessions, onCreateSession }: Props) {
   }, []);
 
   const calendar = useMemo(
-    () => buildCalendarMatrix(activeDate, sessions),
+    () => {
+      // Filter out no-schedule sessions from calendar view
+      const scheduledSessions = sessions.filter(
+        (session) => session.schedule.kind === "all-day" || session.schedule.kind === "timed"
+      );
+      return buildCalendarMatrix(activeDate, scheduledSessions);
+    },
     [activeDate, sessions],
   );
 
   const mobileAgenda = useMemo(() => {
-    const sorted = [...sessions].sort(
+    // Filter out no-schedule sessions from mobile agenda
+    const scheduledSessions = sessions.filter(
+      (session) => session.schedule.kind === "all-day" || session.schedule.kind === "timed"
+    );
+    const sorted = [...scheduledSessions].sort(
       (a, b) => sessionReferenceDate(a).getTime() - sessionReferenceDate(b).getTime(),
     );
     const groups = new Map<string, Session[]>();
@@ -160,11 +170,10 @@ export function SessionsCalendar({ sessions, onCreateSession }: Props) {
                         case "all-day":
                           return "All day";
                         case "timed":
-                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${
-                            session.schedule.endAt
+                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${session.schedule.endAt
                               ? ` – ${format(parseISO(session.schedule.endAt), "HH:mm")}`
                               : ""
-                          }`;
+                            }`;
                         default:
                           return "No schedule";
                       }
@@ -254,9 +263,8 @@ export function SessionsCalendar({ sessions, onCreateSession }: Props) {
                 data-current-month={day.isCurrentMonth}
               >
                 <span
-                  className={`font-semibold ${
-                    day.isCurrentMonth ? "text-foreground" : "text-muted-foreground"
-                  }`}
+                  className={`font-semibold ${day.isCurrentMonth ? "text-foreground" : "text-muted-foreground"
+                    }`}
                 >
                   {format(day.date, "d")}
                 </span>
@@ -267,11 +275,10 @@ export function SessionsCalendar({ sessions, onCreateSession }: Props) {
                         case "all-day":
                           return "All day";
                         case "timed":
-                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${
-                            session.schedule.endAt
+                          return `${format(parseISO(session.schedule.startAt), "HH:mm")}${session.schedule.endAt
                               ? ` – ${format(parseISO(session.schedule.endAt), "HH:mm")}`
                               : ""
-                          }`;
+                            }`;
                         default:
                           return "No schedule";
                       }

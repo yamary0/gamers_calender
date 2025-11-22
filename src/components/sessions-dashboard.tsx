@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { parseISO } from "date-fns";
+import { parseISO, format, isToday, isTomorrow, isYesterday } from "date-fns";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -84,6 +84,51 @@ export function SessionsDashboard({
         return parseISO(session.createdAt).getTime();
     }
   };
+
+  const getSessionDate = (session: Session): string => {
+    switch (session.schedule.kind) {
+      case "all-day":
+        return session.schedule.date;
+      case "timed":
+        return session.schedule.startAt.split('T')[0];
+      default:
+        return "9999-12-31"; // Special marker for no-schedule sessions to sort them last
+    }
+  };
+
+  const formatDateLabel = (dateString: string): string => {
+    if (dateString === "9999-12-31") return "No Schedule";
+    const date = parseISO(dateString);
+    if (isToday(date)) return "Today";
+    if (isTomorrow(date)) return "Tomorrow";
+    if (isYesterday(date)) return "Yesterday";
+    return format(date, "MMMM d, yyyy");
+  };
+
+  const groupedSessions = useMemo(() => {
+    const sorted = [...sessions].sort(
+      (first, second) =>
+        getScheduleStartInstant(first) - getScheduleStartInstant(second),
+    );
+
+    const groups = new Map<string, Session[]>();
+    sorted.forEach((session) => {
+      const dateKey = getSessionDate(session);
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, []);
+      }
+      groups.get(dateKey)!.push(session);
+    });
+
+    // Sort groups by date, with "No Schedule" (9999-12-31) at the end
+    return Array.from(groups.entries())
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, sessions]) => ({
+        date,
+        label: formatDateLabel(date),
+        sessions,
+      }));
+  }, [sessions]);
 
   const calendarSessions = useMemo(
     () =>
@@ -336,18 +381,27 @@ export function SessionsDashboard({
                     : "No sessions yet. Create one to get started!"}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {sessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    userId={userId}
-                    selectedGuildSlug={selectedGuild?.slug}
-                    onJoin={() => handleToggleParticipation(session)}
-                    onLeave={() => handleToggleParticipation(session)}
-                    isPending={pendingSessionId === session.id}
-                    canMutate={canMutate}
-                  />
+              <div className="space-y-6">
+                {groupedSessions.map((group) => (
+                  <div key={group.date} className="space-y-3">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      {group.label}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {group.sessions.map((session) => (
+                        <SessionCard
+                          key={session.id}
+                          session={session}
+                          userId={userId}
+                          selectedGuildSlug={selectedGuild?.slug}
+                          onJoin={() => handleToggleParticipation(session)}
+                          onLeave={() => handleToggleParticipation(session)}
+                          isPending={pendingSessionId === session.id}
+                          canMutate={canMutate}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

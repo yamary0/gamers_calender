@@ -55,7 +55,7 @@ export default function RootLayout({
                   >
                     <Image src="/aligna_icon_positive.svg" alt="Aligna" width={48} height={48} />
                   </Link>
-                  <div className="flex items-center gap-3 rounded-full border border-border/30 bg-muted/30 px-3 py-2 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-3">
                     <GuildSwitcher />
                     <UserMenu />
                   </div>

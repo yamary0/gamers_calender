@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Jersey_10 } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { Analytics } from "@vercel/analytics/next";
@@ -7,7 +7,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { GuildProvider } from "@/components/guild-provider";
 import { GuildSwitcher } from "@/components/guild-switcher";
 import { UserMenu } from "@/components/user-menu";
-import Image from 'next/image';
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import FooterYear from "@/components/footer-year";
 const geistSans = Geist({
@@ -17,6 +17,12 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const jersey = Jersey_10({
+  variable: "--font-jersey",
+  weight: "400",
   subsets: ["latin"],
 });
 
@@ -46,7 +52,7 @@ export default function RootLayout({
   return (
     <html lang="ja" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${jersey.variable} antialiased`}
       >
         <AuthProvider>
           <GuildProvider>
@@ -57,9 +63,14 @@ export default function RootLayout({
                 <div className="relative mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
                   <Link
                     href="/"
-                    className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
+                    className="group flex items-center gap-3 text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
                     <Image src="/aligna_icon_positive.svg" alt="Aligna" width={48} height={48} />
+                    <span
+                      className={`${jersey.className} text-xl font-bold tracking-[0.18em] text-foreground transition-colors group-hover:text-primary`}
+                    >
+                      ALIGNA
+                    </span>
                   </Link>
                   <div className="flex items-center gap-3">
                     <GuildSwitcher />
@@ -73,9 +84,14 @@ export default function RootLayout({
                 <div className="flex h-14 items-center justify-center px-4">
                   <Link
                     href="/"
-                    className="text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
+                    className="group flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground/80 transition hover:text-foreground"
                   >
-                    <Image src="/aligna_icon_positive.svg" alt="Aligna" width={48} height={48} />
+                    <Image src="/aligna_icon_positive.svg" alt="Aligna" width={36} height={36} />
+                    <span
+                      className={`${jersey.className} text-lg font-bold tracking-[0.18em] text-foreground transition-colors group-hover:text-primary`}
+                    >
+                      ALIGNA
+                    </span>
                   </Link>
                 </div>
               </header>

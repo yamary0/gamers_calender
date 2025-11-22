@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { parseISO, format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { ArrowDown, Loader2 } from "lucide-react";
 import { ErrorToast } from "@/components/error-toast";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -12,6 +13,7 @@ import type { Session } from "@/services/session-store";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { SessionCard } from "@/components/session-card";
 import { CreateSessionDialog } from "@/components/create-session-dialog";
+import { usePullToRefresh } from "@/lib/use-pull-to-refresh";
 
 type SessionsDashboardProps = {
   initialSessions: Session[];
@@ -40,6 +42,7 @@ export function SessionsDashboard({
   const selectedGuild = guilds.find((guild) => guild.id === selectedGuildId) ?? null;
   const userId = user?.id ?? null;
   const isTabletUp = useMediaQuery("(min-width: 768px)");
+  const isMobile = !isTabletUp;
 
   useEffect(() => {
     if (!isTabletUp) {
@@ -47,10 +50,9 @@ export function SessionsDashboard({
     }
   }, [isTabletUp]);
 
-  async function refreshSessions() {
+  const fetchSessions = useCallback(async (): Promise<Session[]> => {
     if (!canMutate || !selectedGuildId) {
-      setSessions([]);
-      return;
+      return [];
     }
 
     const headers: HeadersInit = accessToken
@@ -64,15 +66,41 @@ export function SessionsDashboard({
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        setSessions([]);
-        return;
+        return [];
       }
       throw new Error(`Failed to fetch sessions: ${response.status}`);
     }
 
     const data = (await response.json()) as { data: Session[] };
-    setSessions(data.data);
-  }
+    return data.data;
+  }, [accessToken, canMutate, selectedGuildId]);
+
+  const refreshSessions = useCallback(async () => {
+    const data = await fetchSessions();
+    setSessions(data);
+  }, [fetchSessions]);
+
+  const handleRefresh = useCallback(async () => {
+    setFormError(null);
+    try {
+      await refreshSessions();
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "Unable to refresh sessions",
+      );
+    }
+  }, [refreshSessions]);
+
+  const {
+    distance: pullDistance,
+    progress: pullProgress,
+    threshold: pullThreshold,
+    isRefreshing: isPullRefreshing,
+    handlers: pullHandlers,
+  } = usePullToRefresh({
+    enabled: isMobile,
+    onRefresh: handleRefresh,
+  });
 
   const getScheduleStartInstant = (session: Session) => {
     switch (session.schedule.kind) {
@@ -142,32 +170,11 @@ export function SessionsDashboard({
   useEffect(() => {
     let cancelled = false;
 
-    if (!canMutate || !selectedGuildId) {
-      setSessions([]);
-      return;
-    }
-
     startTransition(async () => {
       try {
-        const headers: HeadersInit = accessToken
-          ? { Authorization: `Bearer ${accessToken}` }
-          : {};
-        const response = await fetch(`/api/guilds/${selectedGuildId}/sessions`, {
-          cache: "no-store",
-          headers,
-        });
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            if (!cancelled) {
-              setSessions([]);
-            }
-            return;
-          }
-          throw new Error(`Failed to fetch sessions: ${response.status}`);
-        }
-        const data = (await response.json()) as { data: Session[] };
+        const data = await fetchSessions();
         if (!cancelled) {
-          setSessions(data.data);
+          setSessions(data);
         }
       } catch (error) {
         if (!cancelled) {
@@ -181,7 +188,7 @@ export function SessionsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [canMutate, accessToken, selectedGuildId]);
+  }, [fetchSessions]);
 
   function handleToggleParticipation(targetSession: Session) {
     if (!canMutate || !selectedGuildId) {
@@ -315,7 +322,7 @@ export function SessionsDashboard({
                 <CreateSessionDialog
                   guildId={selectedGuildId}
                   accessToken={accessToken}
-                  onSessionCreated={refreshSessions}
+                  onSessionCreated={handleRefresh}
                   trigger={
                     <Button size="sm" className="h-8 text-xs">
                       + Session
@@ -329,7 +336,44 @@ export function SessionsDashboard({
             />
           </div>
         ) : (
-          <>
+          <div
+            {...pullHandlers}
+            className={isMobile ? "space-y-4 touch-pan-y" : "space-y-4"}
+          >
+            {isMobile && (
+              <div
+                className="relative -mx-4 h-0 px-4 overflow-visible"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <div
+                  className="pointer-events-none flex justify-center transition-all duration-150"
+                  style={{
+                    transform: `translateY(${pullDistance}px)`,
+                    opacity: pullDistance > 0 || isPullRefreshing ? 1 : 0,
+                  }}
+                >
+                  <div className="inline-flex items-center gap-2 rounded-full border bg-background/90 px-3 py-1 text-[11px] font-semibold text-foreground shadow-md">
+                    {isPullRefreshing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ArrowDown
+                        className="h-3.5 w-3.5 transition-transform duration-150"
+                        aria-hidden="true"
+                        style={{ transform: `rotate(${Math.min(180, pullProgress * 180)}deg)` }}
+                      />
+                    )}
+                    <span className="text-foreground/80">
+                      {isPullRefreshing
+                        ? "Refreshing"
+                        : pullDistance >= pullThreshold
+                          ? "Release"
+                          : "Pull to refresh"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Feed Header / Actions */}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Active Sessions</h2>
@@ -338,7 +382,7 @@ export function SessionsDashboard({
                   <CreateSessionDialog
                     guildId={selectedGuildId}
                     accessToken={accessToken}
-                    onSessionCreated={refreshSessions}
+                    onSessionCreated={handleRefresh}
                     trigger={
                       <Button variant="outline" size="sm" className="h-8 text-xs">
                         + Session
@@ -346,28 +390,18 @@ export function SessionsDashboard({
                     }
                   />
                 )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    startTransition(async () => {
-                      try {
-                        await refreshSessions();
-                      } catch (error) {
-                        setFormError(
-                          error instanceof Error
-                            ? error.message
-                            : "Unable to refresh sessions",
-                        );
-                      }
-                    })
-                  }
-                  disabled={isPending}
-                  className="h-8 text-xs"
-                >
-                  Refresh
-                </Button>
+                {isTabletUp && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => startTransition(() => void handleRefresh())}
+                    disabled={isPending || isPullRefreshing}
+                    className="h-8 text-xs"
+                  >
+                    Refresh
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -405,7 +439,7 @@ export function SessionsDashboard({
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </section>

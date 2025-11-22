@@ -1,20 +1,21 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
+import { getUserFromRequest } from "@/lib/auth-server";
+import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionDiscordPayload } from "@/lib/session-discord";
+import {
+  scheduleSessionStartNotification,
+  cancelSessionStartNotification,
+} from "@/lib/session-notifier";
+import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
+import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
 import {
   deleteSession,
   getSession,
   updateSession,
   type SessionSchedule,
 } from "@/services/session-store";
-import { ensureGuildMembership, getGuildById } from "@/services/guild-store";
-import { getUserFromRequest } from "@/lib/auth-server";
-import { sendDiscordNotification } from "@/lib/discord";
-import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
-import {
-  scheduleSessionStartNotification,
-  cancelSessionStartNotification,
-} from "@/lib/session-notifier";
 
 type RouteContext = {
   params: Promise<{ guildId: string; sessionId: string }>;
@@ -192,26 +193,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Guild not found." }, { status: 404 });
     }
 
+    const updaterName =
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      user.email ??
+      user.id;
+
     const result = await updateSession(sessionId, updates, guildId);
 
     const baseUrl = resolveBaseUrl(request);
     const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
-    const formatMessage = (message: string) =>
-      sessionUrl ? `${message}\n🔗 ${sessionUrl}` : message;
 
     if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
-        {
-          content: formatMessage(
-            `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
-          ),
-        },
+        buildSessionDiscordPayload({
+          event: "activated",
+          session: result.session,
+          guildName: guild.name,
+          sessionUrl,
+          actorName: updaterName,
+        }),
         guild.webhookUrl,
       );
     }
 
     scheduleSessionStartNotification({
       guildId,
+      guildName: guild.name,
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,

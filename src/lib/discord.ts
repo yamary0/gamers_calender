@@ -1,4 +1,4 @@
-type DiscordWebhookPayload = {
+export type DiscordWebhookPayload = {
   content?: string;
   username?: string;
   embeds?: Array<Record<string, unknown>>;

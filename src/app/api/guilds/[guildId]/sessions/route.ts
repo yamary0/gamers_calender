@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { parseISO, isValid as isValidDate } from "date-fns";
 import { getUserFromRequest } from "@/lib/auth-server";
 import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionDiscordPayload } from "@/lib/session-discord";
 import { buildSessionUrl, resolveBaseUrl } from "@/lib/url";
 import { scheduleSessionStartNotification } from "@/lib/session-notifier";
 import { getGuildById } from "@/services/guild-store";
@@ -181,33 +182,36 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const baseUrl = resolveBaseUrl(request);
     const sessionUrl = buildSessionUrl(baseUrl, guild.slug, result.session.id);
-    const formatMessage = (message: string) =>
-      sessionUrl ? `${message}\n🔗 ${sessionUrl}` : message;
 
     if (guild.notificationSettings.onSessionCreate && guild.webhookUrl) {
       await sendDiscordNotification(
-        {
-          content: formatMessage(
-            `🆕 **New session:** ${result.session.title} (${result.session.participants.length}/${result.session.maxPlayers}) created by ${creatorName}.`,
-          ),
-        },
+        buildSessionDiscordPayload({
+          event: "created",
+          session: result.session,
+          guildName: guild.name,
+          sessionUrl,
+          actorName: creatorName,
+        }),
         guild.webhookUrl,
       );
     }
 
     if (result.activated && guild.notificationSettings.onSessionActivate && guild.webhookUrl) {
       await sendDiscordNotification(
-        {
-          content: formatMessage(
-            `✅ **Session ready:** ${result.session.title} is now active (${result.session.participants.length}/${result.session.maxPlayers}).`,
-          ),
-        },
+        buildSessionDiscordPayload({
+          event: "activated",
+          session: result.session,
+          guildName: guild.name,
+          sessionUrl,
+          actorName: creatorName,
+        }),
         guild.webhookUrl,
       );
     }
 
     scheduleSessionStartNotification({
       guildId,
+      guildName: guild.name,
       session: result.session,
       webhookUrl: guild.webhookUrl,
       settings: guild.notificationSettings,

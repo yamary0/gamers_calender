@@ -1,4 +1,5 @@
 import { sendDiscordNotification } from "@/lib/discord";
+import { buildSessionDiscordPayload } from "@/lib/session-discord";
 import type { Session } from "@/services/session-store";
 import type { GuildNotificationSettings } from "@/services/guild-store";
 
@@ -10,6 +11,7 @@ const sessionKey = (guildId: string, sessionId: string) => `${guildId}:${session
 
 type ScheduleConfig = {
   guildId: string;
+  guildName: string;
   session: Session;
   webhookUrl: string | null;
   settings: GuildNotificationSettings;
@@ -34,6 +36,7 @@ const getStartDate = (session: Session): Date | null => {
 
 export function scheduleSessionStartNotification({
   guildId,
+  guildName,
   session,
   webhookUrl,
   settings,
@@ -56,18 +59,16 @@ export function scheduleSessionStartNotification({
     return;
   }
 
-  const content = sessionUrl
-    ? `🕒 **Session starting:** ${session.title} is beginning now.\n🔗 ${sessionUrl}`
-    : `🕒 **Session starting:** ${session.title} is beginning now.`;
+  const payload = buildSessionDiscordPayload({
+    event: "starting",
+    session,
+    guildName,
+    sessionUrl,
+  });
 
   const delay = startDate.getTime() - Date.now();
   if (delay <= 0) {
-    void sendDiscordNotification(
-      {
-        content,
-      },
-      webhookUrl,
-    );
+    void sendDiscordNotification(payload, webhookUrl);
     return;
   }
 
@@ -77,12 +78,7 @@ export function scheduleSessionStartNotification({
   }
 
   const timeout = setTimeout(() => {
-    void sendDiscordNotification(
-      {
-        content,
-      },
-      webhookUrl,
-    ).finally(() => {
+    void sendDiscordNotification(payload, webhookUrl).finally(() => {
       scheduled.delete(key);
     });
   }, delay);

@@ -201,7 +201,7 @@ export function GuildSwitcher({ trigger, side = "bottom" }: { trigger?: React.Re
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm md:hidden"
               onClick={() => setIsOpen(false)}
               aria-hidden="true"
             />
@@ -247,17 +247,26 @@ export function GuildSwitcher({ trigger, side = "bottom" }: { trigger?: React.Re
           {isOpen && (
             <motion.div
               ref={popoverRef}
+              drag={window.innerWidth < 768 ? "y" : false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.2 }}
+              onDragEnd={(_, info) => {
+                if (window.innerWidth >= 768) return;
+                if (info.offset.y > 100 || info.velocity.y > 500) {
+                  setIsOpen(false);
+                }
+              }}
               initial={window.innerWidth < 768 ? { y: "100%" } : { opacity: 0, scale: 0.95 }}
               animate={window.innerWidth < 768 ? { y: 0 } : { opacity: 1, scale: 1 }}
               exit={window.innerWidth < 768 ? { y: "100%" } : { opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className={cn(
                 // Common styles
-                "z-50 border border-border bg-popover shadow-lg",
+                "border border-border bg-popover shadow-lg",
                 // Mobile: Fixed Bottom Sheet
-                "fixed bottom-0 left-0 right-0 w-full rounded-t-xl p-4 pb-safe md:hidden",
+                "fixed bottom-0 left-0 right-0 w-full rounded-t-xl p-4 pb-safe md:hidden z-[70]",
                 // Desktop: Absolute Popover
-                "md:absolute md:w-72 md:rounded-md md:p-3",
+                "md:absolute md:w-72 md:rounded-md md:p-3 md:z-50",
                 // Desktop positioning
                 side === "bottom" ? "md:top-full md:mt-2" : "md:bottom-full md:mb-2",
                 // Desktop alignment

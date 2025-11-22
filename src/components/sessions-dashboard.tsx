@@ -27,6 +27,8 @@ export function SessionsDashboard({
   const [isPending, startTransition] = useTransition();
   const [activeView, setActiveView] = useState<"feed" | "calendar">("calendar");
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [hasFetched, setHasFetched] = useState(initialSessions.length > 0);
   const router = useRouter();
 
   const { session, user } = useAuth();
@@ -76,8 +78,14 @@ export function SessionsDashboard({
   }, [accessToken, canMutate, selectedGuildId]);
 
   const refreshSessions = useCallback(async () => {
-    const data = await fetchSessions();
-    setSessions(data);
+    setIsFetching(true);
+    try {
+      const data = await fetchSessions();
+      setSessions(data);
+      setHasFetched(true);
+    } finally {
+      setIsFetching(false);
+    }
   }, [fetchSessions]);
 
   const handleRefresh = useCallback(async () => {
@@ -90,6 +98,10 @@ export function SessionsDashboard({
       );
     }
   }, [refreshSessions]);
+
+  const shouldShowSkeleton =
+    (isFetching || (!hasFetched && canMutate && hasGuild && Boolean(selectedGuildId))) &&
+    activeView === "feed";
 
   const {
     distance: pullDistance,
@@ -170,17 +182,33 @@ export function SessionsDashboard({
   useEffect(() => {
     let cancelled = false;
 
+    if (!canMutate || !selectedGuildId) {
+      setSessions([]);
+      setIsFetching(false);
+      setHasFetched(false);
+      return;
+    }
+
+    setSessions([]);
+    setIsFetching(true);
+    setHasFetched(false);
+
     startTransition(async () => {
       try {
         const data = await fetchSessions();
         if (!cancelled) {
           setSessions(data);
+          setHasFetched(true);
         }
       } catch (error) {
         if (!cancelled) {
           setFormError(
             error instanceof Error ? error.message : "Unable to load sessions.",
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsFetching(false);
         }
       }
     });
@@ -406,7 +434,36 @@ export function SessionsDashboard({
             </div>
 
             {/* Grid Feed */}
-            {sessions.length === 0 ? (
+            {shouldShowSkeleton ? (
+              <div className="space-y-3">
+                {[0, 1, 2].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-xl border border-border bg-card/60 p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
+                      <div className="h-5 w-12 animate-pulse rounded-full bg-muted" />
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
+                      <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex -space-x-2">
+                        {[0, 1, 2, 3].map((bubble) => (
+                          <div
+                            key={bubble}
+                            className="h-7 w-7 rounded-full border border-background bg-muted/70 shadow-sm"
+                          />
+                        ))}
+                      </div>
+                      <div className="h-4 w-16 animate-pulse rounded bg-muted/80" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : sessions.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
                 {!canMutate
                   ? "Sign in to view guild sessions."

@@ -397,7 +397,7 @@ export function GuildSwitcher({ trigger, side = "bottom" }: { trigger?: React.Re
                           placeholder="Guild name"
                           value={newGuildName}
                           onChange={(event) => setNewGuildName(event.target.value)}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:text-xs"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                           disabled={isSubmitting}
                           autoFocus
                         />
@@ -447,7 +447,7 @@ export function GuildSwitcher({ trigger, side = "bottom" }: { trigger?: React.Re
                             setJoinError(null);
                             setJoinMessage(null);
                           }}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:text-xs"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                           disabled={isJoinLoading || isJoinSubmitting}
                           autoFocus
                         />

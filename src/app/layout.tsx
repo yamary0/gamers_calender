@@ -31,6 +31,7 @@ export const metadata: Metadata = {
   description: "気軽に集まりたいプレイヤー同士を結びつけるコミュニティハブ。",
   icons: {
     icon: "/aligna_icon.svg",
+    apple: "/aligna_icon.png",
   },
   viewport: {
     width: "device-width",

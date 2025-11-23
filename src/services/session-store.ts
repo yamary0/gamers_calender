@@ -12,6 +12,9 @@ export type SessionParticipant = {
   displayName: string | null;
   avatarUrl: string | null;
   provider: string | null;
+  joinStartAt: string | null;
+  joinEndAt: string | null;
+  status: "definite" | "maybe" | "undecided";
 };
 
 export type Session = {
@@ -53,7 +56,12 @@ type SessionRow = {
   start_at: string | null;
   end_at: string | null;
   all_day: boolean | null;
-  participants?: Array<{ user_id: string }>;
+  participants?: Array<{
+    user_id: string;
+    join_start_at: string | null;
+    join_end_at: string | null;
+    status: string;
+  }>;
 };
 
 type ScheduleColumns = {
@@ -104,6 +112,9 @@ const mapRowToSession = (
         displayName: isDiscord ? profile?.displayName ?? null : null,
         avatarUrl: isDiscord ? profile?.avatarUrl ?? null : null,
         provider,
+        joinStartAt: participant.join_start_at,
+        joinEndAt: participant.join_end_at,
+        status: (participant.status as "definite" | "maybe" | "undecided") ?? "definite",
       };
     }) ?? [],
   createdAt: row.created_at,
@@ -161,11 +172,11 @@ async function loadParticipantProfiles(
             ? (user.app_metadata.provider as string)
             : Array.isArray(user.identities)
               ? user.identities.find(
-                  (identity) =>
-                    identity &&
-                    typeof identity.provider === "string" &&
-                    identity.user_id === userId,
-                )?.provider ?? null
+                (identity) =>
+                  identity &&
+                  typeof identity.provider === "string" &&
+                  identity.user_id === userId,
+              )?.provider ?? null
               : null;
 
         profiles.set(userId, {
@@ -204,7 +215,7 @@ async function fetchSessionById(id: string): Promise<SessionRow | null> {
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id)",
+      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id, join_start_at, join_end_at, status)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -239,7 +250,7 @@ export async function listSessions(guildId: string): Promise<Session[]> {
   const { data, error } = await supabase
     .from("sessions")
     .select(
-      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id)",
+      "id,title,max_players,status,guild_id,created_at,start_at,end_at,all_day,participants(user_id, join_start_at, join_end_at, status)",
     )
     .eq("guild_id", guildId)
     .order("created_at", { ascending: false });
@@ -301,6 +312,7 @@ export async function createSession(
       {
         session_id: data.id,
         user_id: userId,
+        status: "definite",
       },
       { onConflict: "session_id,user_id" },
     );
@@ -432,10 +444,17 @@ export type LeaveSessionResult = {
   reopened: boolean;
 };
 
+export type JoinSessionPayload = {
+  joinStartAt?: string | null;
+  joinEndAt?: string | null;
+  status?: "definite" | "maybe" | "undecided";
+};
+
 export async function joinSession(
   id: string,
   userId: string,
   expectedGuildId?: string,
+  details?: JoinSessionPayload,
 ): Promise<JoinSessionResult> {
   const supabase = admin();
   const session = await fetchSessionById(id);
@@ -456,6 +475,15 @@ export async function joinSession(
     .maybeSingle();
 
   if (existing) {
+    // If already joined, update details if provided
+    if (details) {
+      await updateParticipant(id, userId, details, expectedGuildId);
+      const refreshed = await fetchSessionById(id);
+      if (!refreshed) throw new Error("Failed to reload session");
+      const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+      return { session: mapRowToSession(refreshed, profiles), activated: false };
+    }
+
     const profiles = await loadParticipantProfiles(collectParticipantIds(session));
     return { session: mapRowToSession(session, profiles), activated: false };
   }
@@ -469,6 +497,9 @@ export async function joinSession(
   const { error: insertError } = await supabase.from("participants").insert({
     session_id: id,
     user_id: userId,
+    join_start_at: details?.joinStartAt ?? null,
+    join_end_at: details?.joinEndAt ?? null,
+    status: details?.status ?? "definite",
   });
 
   if (insertError) {
@@ -494,6 +525,49 @@ export async function joinSession(
     session: mapRowToSession(refreshed, profiles),
     activated: shouldActivate,
   };
+}
+
+export async function updateParticipant(
+  sessionId: string,
+  userId: string,
+  details: JoinSessionPayload,
+  expectedGuildId?: string,
+): Promise<Session> {
+  const supabase = admin();
+  const session = await fetchSessionById(sessionId);
+
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  if (expectedGuildId && session.guild_id !== expectedGuildId) {
+    throw new Error("Session does not belong to this guild");
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (details.joinStartAt !== undefined) updates.join_start_at = details.joinStartAt;
+  if (details.joinEndAt !== undefined) updates.join_end_at = details.joinEndAt;
+  if (details.status !== undefined) updates.status = details.status;
+
+  if (Object.keys(updates).length > 0) {
+    const { error } = await supabase
+      .from("participants")
+      .update(updates)
+      .eq("session_id", sessionId)
+      .eq("user_id", userId);
+
+    if (error) {
+      throw new Error(`Failed to update participant: ${error.message}`);
+    }
+  }
+
+  const refreshed = await fetchSessionById(sessionId);
+  if (!refreshed) {
+    throw new Error("Failed to reload session after update.");
+  }
+
+  const profiles = await loadParticipantProfiles(collectParticipantIds(refreshed));
+  return mapRowToSession(refreshed, profiles);
 }
 
 export async function leaveSession(

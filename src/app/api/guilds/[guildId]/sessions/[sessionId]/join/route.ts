@@ -42,7 +42,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Guild not found." }, { status: 404 });
     }
 
-    const result = await joinSession(sessionId, user.id, guildId);
+    const body = await request.json().catch(() => ({}));
+    const result = await joinSession(sessionId, user.id, guildId, body);
     const participantName =
       (user.user_metadata?.full_name as string | undefined) ??
       (user.user_metadata?.name as string | undefined) ??

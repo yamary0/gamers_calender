@@ -529,7 +529,7 @@ export function SessionsDashboard({
                       </h3>
                       <Button
                         type="button"
-                        size="xs"
+                        size="sm"
                         variant="ghost"
                         onClick={() => setIsPastCollapsed((prev) => !prev)}
                         className="h-7 text-[11px]"

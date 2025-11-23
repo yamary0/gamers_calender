@@ -29,6 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ParticipationForm, type ParticipationFormData } from "@/components/participation-form";
 import { useAuth } from "@/components/auth-provider";
 import { describeSessionSchedule } from "@/lib/session-formatters";
 import {
@@ -39,6 +47,7 @@ import {
 import type { Session } from "@/services/session-store";
 import { AvatarStack } from "@/components/avatar-stack";
 import { cn } from "@/lib/utils";
+import { SessionTimeline } from "@/components/session-timeline";
 
 type SessionDetailPanelProps = {
   initialSession: Session;
@@ -51,6 +60,7 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
+  const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
 
   const scheduleDefaults = getScheduleFormDefaults(initialSession);
   const [editTitle, setEditTitle] = useState(initialSession.title);
@@ -77,9 +87,8 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
   const canMutate = Boolean(accessToken);
   const guildId = session.guildId;
   const userId = user?.id ?? null;
-  const isParticipant = Boolean(
-    userId && session.participants.some((participant) => participant.id === userId),
-  );
+  const currentParticipant = session.participants.find((p) => p.id === userId);
+  const isParticipant = Boolean(currentParticipant);
 
   const createdLabel = format(parseISO(session.createdAt), "MMM d, yyyy HH:mm");
   const canAttemptJoin = session.status !== "active";
@@ -118,23 +127,50 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
     return payload.data;
   };
 
-  const handleParticipationToggle = () => {
-    if (!canMutate || !guildId) {
-      setFormError(!canMutate ? "Sign in to manage sessions." : "Select a guild first.");
-      return;
-    }
+  const handleJoinSubmit = (data: ParticipationFormData) => {
+    if (!canMutate || !guildId) return;
 
-    if (isParticipant) {
-      const confirmed =
-        typeof window === "undefined" ||
-        window.confirm("Leave this session? Your spot will open for other members.");
-      if (!confirmed) {
-        return;
+    startTransition(async () => {
+      setFormError(null);
+      try {
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(
+          `/api/guilds/${guildId}/sessions/${session.id}/join`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify(data),
+          },
+        );
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? "Failed to update participation");
+        }
+
+        await refreshSessionData();
+        setIsJoinDialogOpen(false);
+      } catch (error) {
+        setFormError(
+          error instanceof Error ? error.message : "Unable to update participation",
+        );
       }
-    } else if (!canAttemptJoin) {
-      setFormError("Session is already active.");
-      return;
-    }
+    });
+  };
+
+  const handleLeave = () => {
+    if (!canMutate || !guildId) return;
+
+    const confirmed = window.confirm("Leave this session? Your spot will open for other members.");
+    if (!confirmed) return;
 
     startTransition(async () => {
       setFormError(null);
@@ -146,21 +182,16 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
         const response = await fetch(
           `/api/guilds/${guildId}/sessions/${session.id}/join`,
           {
-            method: isParticipant ? "DELETE" : "POST",
+            method: "DELETE",
             headers,
           },
         );
         if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? "Failed to update session membership");
+          throw new Error("Failed to leave session");
         }
         await refreshSessionData();
       } catch (error) {
-        setFormError(
-          error instanceof Error ? error.message : "Unable to update session membership",
-        );
+        setFormError(error instanceof Error ? error.message : "Unable to leave session");
       }
     });
   };
@@ -280,6 +311,8 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
     applySessionToEditForm(session);
     setIsEditing(false);
   };
+
+
 
   if (isEditing) {
     return (
@@ -464,21 +497,33 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row md:flex-col lg:flex-row">
-            <Button
-              size="lg"
-              className={cn(
-                "w-full md:w-auto",
-                isParticipant ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : ""
-              )}
-              variant={isParticipant ? "ghost" : "default"}
-              onClick={handleParticipationToggle}
-              disabled={actionDisabled}
-            >
-              {isParticipant ? "Leave Session" : "Join Session"}
-            </Button>
+            {isParticipant ? (
+              <div className="flex gap-2">
+
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleLeave}
+                  disabled={actionDisabled}
+                >
+                  Leave
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="lg"
+                disabled={actionDisabled}
+                onClick={() => setIsJoinDialogOpen(true)}
+              >
+                Join Session
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Timeline Section */}
+      <SessionTimeline session={session} />
 
       {/* Participants Section */}
       <div className="space-y-4">
@@ -492,43 +537,63 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
                 <p className="text-sm">Be the first to join!</p>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {session.participants.map((participant) => {
-                  const isDiscord = participant.provider === "discord";
-                  const label = isDiscord && participant.displayName
-                    ? participant.displayName
-                    : participant.id;
+              <div className="space-y-4">
 
-                  return (
-                    <div
-                      key={participant.id}
-                      className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-muted/30 p-3"
-                    >
-                      <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-border bg-background">
-                        {isDiscord && participant.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={participant.avatarUrl}
-                            alt={label}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
-                            {label.charAt(0).toUpperCase()}
-                          </div>
+
+                <div className="grid gap-3">
+                  {session.participants.map((participant) => {
+                    const isDiscord = participant.provider === "discord";
+                    const label = isDiscord && participant.displayName
+                      ? participant.displayName
+                      : participant.id;
+
+                    const isCurrentUser = participant.id === userId;
+
+                    return (
+                      <div
+                        key={participant.id}
+                        onClick={() => {
+                          if (isCurrentUser) setIsJoinDialogOpen(true);
+                        }}
+                        className={cn(
+                          "relative flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 transition-colors",
+                          isCurrentUser && "cursor-pointer hover:bg-muted/50 border-primary/20"
                         )}
+                      >
+                        <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-border bg-background">
+                          {isDiscord && participant.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={participant.avatarUrl}
+                              alt={label}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
+                              {label.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="truncate text-sm font-medium text-foreground" title={label}>
+                              {label} {isCurrentUser && "(You)"}
+                            </p>
+                            <span className={cn(
+                              "text-xs px-2 py-0.5 rounded-full",
+                              participant.status === "maybe" ? "bg-yellow-500/10 text-yellow-500" :
+                                participant.status === "undecided" ? "bg-gray-500/10 text-gray-500" :
+                                  "bg-green-500/10 text-green-500"
+                            )}>
+                              {participant.status}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="w-full truncate text-sm font-medium text-foreground" title={label}>
-                          {label}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {isDiscord ? "Discord User" : "Guest User"}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </CardContent>
@@ -537,6 +602,31 @@ export function SessionDetailPanel({ initialSession, backHref }: SessionDetailPa
 
       {authError && <ErrorToast message={authError} />}
       {formError && <ErrorToast message={formError} />}
+
+      <Dialog open={isJoinDialogOpen} onOpenChange={setIsJoinDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isParticipant ? "Edit Participation" : "Join Session"}
+            </DialogTitle>
+          </DialogHeader>
+          <ParticipationForm
+            session={session}
+            initialData={
+              currentParticipant
+                ? {
+                  status: currentParticipant.status,
+                  joinStartAt: currentParticipant.joinStartAt,
+                  joinEndAt: currentParticipant.joinEndAt,
+                }
+                : undefined
+            }
+            onSubmit={handleJoinSubmit}
+            onCancel={() => setIsJoinDialogOpen(false)}
+            isPending={isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
